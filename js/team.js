@@ -58,10 +58,15 @@ var TEAM = [
   },
   {
     name: { ru: 'Мыкыта', en: 'Mykyta' },
-    short: { ru: 'Участник команды', en: 'Team member' },   // TODO: пара слов о человеке
-    about: { ru: '', en: '' },                              // TODO: подробное описание
-    photo: TEAM_PLACEHOLDER,                                // человек не согласился показывать своё фото
-    links: []
+    short: { ru: 'Актёр озвучки, в основном озвучиваю персонажей на русском.', en: 'Voice actor, mostly voicing characters in Russian.' },
+    about: {
+      ru: 'Просто обожаю декабрь, самый лучший месяц для меня. Также ещё и делаю свои собственные анимации, даже сериал веду.\n\n' +
+          'Ну и также люблю роллы.',
+      en: 'I just love December, the best month for me. I also do my own animations, even host a TV series.\n\n' +
+          'Well, I also love rolls.'
+    },
+    photo: TEAM_PLACEHOLDER,   // человек не согласился показывать своё фото
+    links: []                  // соцсети не указал
   }
 ];
 
