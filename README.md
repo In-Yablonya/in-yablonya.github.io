@@ -84,8 +84,8 @@ python -m http.server 8080
    ```
 
    Без CLI то же делается вручную: Realtime Database → «Правила» → вставить содержимое файла → «Опубликовать».
-4. **Один раз, после публикации на GitHub Pages:** Authentication → Settings (Настройки) → Authorized domains (Авторизованные домены) → «Добавить домен» → `svetlyi072-debug.github.io`. Без этого на опубликованном сайте не выдаётся ID (ошибка `auth/unauthorized-domain`), хотя на `localhost` всё работает.
-5. Рекомендуется: в Google Cloud Console → «Учётные данные» ограничить ключ API по HTTP-источникам: `https://svetlyi072-debug.github.io/*` и `http://localhost:*` (для проверки у себя).
+4. **Один раз, после публикации на GitHub Pages:** Authentication → Settings (Настройки) → Authorized domains (Авторизованные домены) → «Добавить домен» → `in-yablonya.github.io`. Без этого на опубликованном сайте не выдаётся ID (ошибка `auth/unauthorized-domain`), хотя на `localhost` всё работает.
+5. Рекомендуется: в Google Cloud Console → «Учётные данные» ограничить ключ API по HTTP-источникам: `https://in-yablonya.github.io/*` и `http://localhost:*` (для проверки у себя).
 6. **Администраторы** (сотрудники поддержки и владелец сайта) отмечаются вручную в базе. В консоли Firebase: Realtime Database → «Данные» → `players` → нужный игрок → поле **`admin`** → значение `true` (тип boolean). `false` или отсутствие поля — обычный игрок. У администратора вместо кнопки «Обратиться в поддержку» появляется «Ответить на вопросы» с чатами игроков. Сняли флаг — права пропадают сразу.
 
    Как найти нужного игрока, не спрашивая его ID (ID — это пароль): попросите человека задать в «Аккаунте» никнейм и найдите запись с этим `nickname` в `players`. У новых игроков поле `admin: false` создаётся само. У тех, кто зарегистрировался раньше, поля может не быть: добавьте его вручную.
@@ -124,10 +124,10 @@ newsReactions/<news>/<ключ>       'like' или 'dislike'; ключ — хэ
 
 ## Опубликовать на GitHub Pages
 
-Сайт лежит в публичном репозитории [svetlyi072-debug/Yablonya-WEB](https://github.com/svetlyi072-debug/Yablonya-WEB) и открывается по адресу **https://svetlyi072-debug.github.io/Yablonya-WEB/** (Settings → Pages → Source: ветка `main`, папка `/ (root)`). Изменения, отправленные в `main`, появляются на сайте через минуту-две.
+Сайт лежит в публичном репозитории [In-Yablonya/in-yablonya.github.io](https://github.com/In-Yablonya/in-yablonya.github.io) организации `In-Yablonya` и открывается по адресу **https://in-yablonya.github.io/** (Settings → Pages → Source: ветка `main`, папка `/ (root)`). Имя репозитория обязано быть `<организация>.github.io`: тогда сайт открывается без добавки в адресе. Изменения, отправленные в `main`, появляются на сайте через минуту-две.
 
 Игры — отдельные **публичные** репозитории; файлы лежат в Releases (до 2 ГБ на файл).
 
-Версии сайта отмечены релизами на странице [Releases](https://github.com/svetlyi072-debug/Yablonya-WEB/releases): первая — **v1.0.0**.
+Версии сайта отмечены релизами на странице [Releases](https://github.com/In-Yablonya/in-yablonya.github.io/releases): первая — **v1.0.0**.
 
 Файлы `.exe` без подписи вызывают предупреждение SmartScreen, а для `.apk` нужно разрешить установку из неизвестных источников — подсказки об этом уже есть в окне игры.
