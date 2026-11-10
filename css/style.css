@@ -199,6 +199,7 @@ details.hint p { margin: .5rem 0 0; color: var(--muted); }
 
 /* ---------- формы ---------- */
 .field { display: grid; gap: .35rem; margin-bottom: 1rem; }
+.field[hidden] { display: none; }
 .field label { font-weight: 600; }
 .input, .textarea {
   width: 100%; padding: .65rem .8rem; font: inherit;

@@ -11,10 +11,22 @@
  *  - Администраторы (сотрудники поддержки и владелец сайта) отмечаются вручную в базе:
  *    players/<ID>/admin = true. Игрок сам изменить это поле не может, права проверяют правила базы.
  *
+ * Пароль (по желанию):
+ *  - Пока пароля нет, ID работает как пароль (вход по одному ID, как описано выше).
+ *  - Когда игрок задаёт пароль, текущий вход в Firebase превращается во вход «почта + пароль». Настоящей почты
+ *    у игрока нет: адрес вычисляется из ID (loginEmail) и никому не показывается, а сам пароль хранит Firebase.
+ *  - В базе появляется passwordOwner/<ID> = uid владельца. С этого момента правила не пускают нового входа
+ *    по одному ID: нужен ID и пароль (тогда Firebase возвращает тот же uid). Остальные привязанные входы
+ *    отзываются (links/<ID>/<uid> удаляются), так что «забытый» вход на чужом устройстве пропадает.
+ *  - uidPid/<uid> = <ID> помнит, к какому ID привязан вход, если cookie очистили.
+ *
  * Структура базы и правила доступа: database.rules.json.
  */
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
-import { getAuth, signInAnonymously } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
+import {
+  getAuth, signInAnonymously, signInWithEmailAndPassword, signOut, linkWithCredential, unlink,
+  EmailAuthProvider, reauthenticateWithCredential, updatePassword
+} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
 import {
   getDatabase, ref, get, set, update, remove, push, onValue, runTransaction, serverTimestamp
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js';
@@ -23,14 +35,46 @@ const COOKIE_NAME = 'yablonya_id';
 const STORAGE_KEY = 'yablonya.id';
 const ID_PATTERN = /^[A-Za-z0-9_-]{20,128}$/;
 
+let auth = null;
 let db = null;
 let uid = null;
 let playerId = null;
 let profile = { number: null, nickname: null, admin: false };   // номер, никнейм (если задан) и флаг администратора
 let support = null;     // { admin: true }, если игрок отмечен администратором
+let passwordInfo = { set: false, mine: false };   // задан ли пароль и этот ли вход его хозяин
+let signedOut = false;  // true, если вход этого браузера отозван (на аккаунте задан пароль)
+let lastPrefs = { lang: 'ru', theme: 'system' };
 let initPromise = null;
 
 export const NICKNAME_MAX = 24;
+export const PASSWORD_MIN = 8;
+export const PASSWORD_MAX = 128;
+
+// Домен «почты» для входа по паролю: такого адреса не существует (.invalid), письма на него не уходят.
+const LOGIN_EMAIL_DOMAIN = 'accounts.yablonya.invalid';
+const WRONG_CREDENTIAL = ['auth/invalid-credential', 'auth/wrong-password', 'auth/user-not-found', 'auth/invalid-login-credentials'];
+
+function isDenied(err) {
+  return !!err && (err.code === 'PERMISSION_DENIED' || /permission[_ ]denied/i.test(String(err.message || '')));
+}
+
+// Сразу после смены входа база ещё может помнить прошлый токен: коротко повторяем запрос.
+async function retryDenied(fn, tries = 5, delay = 350) {
+  for (let i = 0; ; i++) {
+    try { return await fn(); } catch (err) {
+      if (!isDenied(err) || i >= tries - 1) throw err;
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+}
+
+// Адрес для входа по паролю считается из ID: u + 40 символов хэша. По адресу ID не восстановить.
+export async function loginEmail(id) {
+  const bytes = new TextEncoder().encode(`yablonya-login:${id}`);
+  const hash = await crypto.subtle.digest('SHA-256', bytes);
+  const hex = Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, '0')).join('');
+  return `u${hex.slice(0, 40)}@${LOGIN_EMAIL_DOMAIN}`;
+}
 
 // ---------- хранение ID ----------
 function readCookie() {
@@ -54,20 +98,64 @@ function storedId() {
   return found || null;
 }
 
+function forgetId() {
+  document.cookie = COOKIE_NAME + '=; max-age=0; path=/; SameSite=Lax';
+  try { localStorage.removeItem(STORAGE_KEY); } catch (e) { /* нечего чистить */ }
+}
+
+// uidPid/<uid> помнит ID, к которому привязан этот вход Firebase: пригодится, если cookie очистили.
+async function savedPid() {
+  try {
+    const value = (await get(ref(db, `uidPid/${uid}`))).val();
+    return typeof value === 'string' && ID_PATTERN.test(value) ? value : null;
+  } catch (err) { return null; }
+}
+
+async function rememberPid(id) {
+  if (id === uid) return;
+  try { await set(ref(db, `uidPid/${uid}`), id); } catch (err) { /* не критично: ID всё равно лежит в cookie */ }
+}
+
+// Читает, задан ли пароль у аккаунта (узел виден только привязанным входам).
+async function loadPasswordInfo() {
+  try {
+    const owner = await get(ref(db, `passwordOwner/${playerId}`));
+    passwordInfo = { set: owner.exists(), mine: owner.exists() && owner.val() === uid };
+  } catch (err) {
+    passwordInfo = { set: false, mine: false };
+  }
+}
+
 // ---------- запуск ----------
 async function start(prefs) {
   const app = initializeApp(window.firebaseConfig);
-  const auth = getAuth(app);
+  auth = getAuth(app);
   db = getDatabase(app);
 
   await auth.authStateReady();
   if (!auth.currentUser) await signInAnonymously(auth);
   uid = auth.currentUser.uid;
-  playerId = storedId() || uid;
+  signedOut = false;
+
+  const saved = await savedPid();
+  playerId = storedId() || saved || uid;
 
   // Привязываем текущий вход в Firebase к ID игрока (нужно, если ID взят из cookie, а uid новый).
   const linkRef = ref(db, `links/${playerId}/${uid}`);
-  if (!(await get(linkRef)).exists()) await set(linkRef, true);
+  try {
+    if (!(await get(linkRef)).exists()) await set(linkRef, true);
+  } catch (err) {
+    if (!isDenied(err) || playerId === uid) throw err;
+    // На этом аккаунте задан пароль, а вход этого браузера уже не привязан к нему (его отозвали).
+    // Продолжаем как новый игрок; войти в прежний аккаунт можно по ID и паролю в окне «Аккаунт».
+    signedOut = true;
+    try { await remove(ref(db, `uidPid/${uid}`)); } catch (e) { /* не критично */ }
+    forgetId();
+    playerId = uid;
+    await set(ref(db, `links/${playerId}/${uid}`), true);
+  }
+  if (saved !== playerId) await rememberPid(playerId);
+  await loadPasswordInfo();
 
   const playerRef = ref(db, `players/${playerId}`);
   const snap = await get(playerRef);
@@ -130,7 +218,9 @@ function snapshotState() {
   return {
     playerId,
     profile: { number: profile.number, nickname: profile.nickname, admin: profile.admin },
-    support: support ? { admin: true } : null
+    support: support ? { admin: true } : null,
+    password: { set: passwordInfo.set, mine: passwordInfo.mine },
+    signedOut
   };
 }
 
@@ -146,6 +236,7 @@ function requireStarted() {
 export function init(prefs) {
   if (!initPromise) {
     const safePrefs = { lang: 'ru', theme: 'system', ...(prefs || {}) };
+    lastPrefs = safePrefs;
     initPromise = start(safePrefs).catch((err) => { initPromise = null; throw err; });
   }
   return initPromise.then(snapshotState);
@@ -158,25 +249,145 @@ export async function savePrefs(prefs) {
   await update(ref(db, `players/${playerId}`), { lang: prefs.lang, theme: prefs.theme });
 }
 
-// Принимает введённый ID игрока: возвращает 'player' | 'same' | 'invalid' | 'notfound'.
-export async function useId(input) {
+// Входит в аккаунт по ID (и паролю, если он задан). Возвращает
+// 'player' | 'same' | 'invalid' | 'notfound' | 'need-password' | 'wrong' | 'toomany'.
+export async function useId(input, password) {
   await requireStarted();
   const id = String(input || '').trim();
   if (!ID_PATTERN.test(id)) return 'invalid';
   if (id === playerId) return 'same';
 
-  // Привязываем вход к ID и смотрим, есть ли такой игрок.
-  await set(ref(db, `links/${id}/${uid}`), true);
+  const pw = String(password || '');
+  if (pw) return signInWithPassword(id, pw);
+
+  // Без пароля войти можно только в аккаунт, у которого пароля нет: правила базы не дадут привязаться к остальным.
+  try {
+    await set(ref(db, `links/${id}/${uid}`), true);
+  } catch (err) {
+    if (isDenied(err)) return 'need-password';
+    throw err;
+  }
   const found = await get(ref(db, `players/${id}`));
   if (found.exists()) {
     playerId = id;
     profile = profileFrom(found.val());
     rememberId(id);
+    signedOut = false;
+    passwordInfo = { set: false, mine: false };
+    await rememberPid(id);
     await syncSupport();                         // у этого аккаунта могут быть права администратора
     return 'player';
   }
   await remove(ref(db, `links/${id}/${uid}`));
   return 'notfound';
+}
+
+// Вход по ID и паролю: Firebase возвращает тот же uid, что и у владельца аккаунта, поэтому привязка уже есть.
+async function signInWithPassword(id, pw) {
+  const email = await loginEmail(id);
+  let cred;
+  try {
+    cred = await signInWithEmailAndPassword(auth, email, pw);
+  } catch (err) {
+    const code = err && err.code;
+    if (code === 'auth/too-many-requests') return 'toomany';
+    if (WRONG_CREDENTIAL.includes(code)) return 'wrong';
+    throw err;
+  }
+
+  const newUid = cred.user.uid;
+  let linked;
+  try {
+    linked = await retryDenied(() => get(ref(db, `links/${id}/${newUid}`)));
+  } catch (err) {
+    if (!isDenied(err)) throw err;
+    linked = null;
+  }
+  if (!linked || !linked.exists()) {
+    // Пароль подошёл, но этот вход не привязан к аккаунту: так быть не должно. Возвращаемся в анонимный вход.
+    await signOut(auth);
+    initPromise = start(lastPrefs).catch((err) => { initPromise = null; throw err; });
+    await initPromise;
+    return 'wrong';
+  }
+
+  uid = newUid;
+  const found = await retryDenied(() => get(ref(db, `players/${id}`)));
+  playerId = id;
+  profile = profileFrom(found.val());
+  rememberId(id);
+  signedOut = false;
+  await rememberPid(id);
+  await loadPasswordInfo();
+  await syncSupport();                           // у этого аккаунта могут быть права администратора
+  return 'player';
+}
+
+// Задаёт пароль аккаунту. Возвращает 'ok' | 'short' | 'long' | 'exists' | 'taken' | 'weak'.
+// Дальше войти в аккаунт можно только по ID и паролю, а остальные привязанные входы отзываются.
+export async function setPassword(password) {
+  await requireStarted();
+  const pw = String(password || '');
+  if (pw.length < PASSWORD_MIN) return 'short';
+  if (pw.length > PASSWORD_MAX) return 'long';
+  if (passwordInfo.set) return 'exists';
+
+  const user = auth.currentUser;
+  const credential = EmailAuthProvider.credential(await loginEmail(playerId), pw);
+  try {
+    await linkWithCredential(user, credential);
+  } catch (err) {
+    const code = err && err.code;
+    if (code === 'auth/email-already-in-use' || code === 'auth/credential-already-in-use') return 'taken';
+    if (code === 'auth/weak-password') return 'weak';
+    throw err;
+  }
+
+  try {
+    await user.getIdToken(true);                 // в токене появляется почта: по ней правила видят, что пароль есть
+    await retryDenied(() => set(ref(db, `passwordOwner/${playerId}`), uid));
+  } catch (err) {
+    // Не получилось закрепить пароль за аккаунтом: откатываем, чтобы не остаться с «наполовину» заданным паролем.
+    try { await unlink(user, 'password'); } catch (e) { /* ничего не поделать */ }
+    throw err;
+  }
+
+  passwordInfo = { set: true, mine: true };
+  await revokeOtherSessions();
+  return 'ok';
+}
+
+// Удаляет привязки всех входов, кроме текущего: устройства, где входили по одному ID, выйдут из аккаунта.
+async function revokeOtherSessions() {
+  try {
+    const all = (await retryDenied(() => get(ref(db, `links/${playerId}`)))).val() || {};
+    const updates = {};
+    Object.keys(all).forEach((other) => { if (other !== uid) updates[`links/${playerId}/${other}`] = null; });
+    if (Object.keys(updates).length) await update(ref(db), updates);
+  } catch (err) {
+    console.warn('Не удалось отозвать другие входы:', err && err.code);
+  }
+}
+
+// Меняет пароль. Возвращает 'ok' | 'short' | 'long' | 'wrong' | 'toomany' | 'not-owner'.
+export async function changePassword(current, next) {
+  await requireStarted();
+  if (!passwordInfo.mine) return 'not-owner';
+  const fresh = String(next || '');
+  if (fresh.length < PASSWORD_MIN) return 'short';
+  if (fresh.length > PASSWORD_MAX) return 'long';
+
+  const user = auth.currentUser;
+  try {
+    await reauthenticateWithCredential(user, EmailAuthProvider.credential(await loginEmail(playerId), String(current || '')));
+  } catch (err) {
+    const code = err && err.code;
+    if (code === 'auth/too-many-requests') return 'toomany';
+    if (WRONG_CREDENTIAL.includes(code)) return 'wrong';
+    throw err;
+  }
+  await updatePassword(user, fresh);
+  return 'ok';
 }
 
 // Меняет никнейм. Пустая строка возвращает имя по умолчанию («Пользователь N»).

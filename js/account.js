@@ -27,6 +27,8 @@
     <p class="status" id="account-status" role="status" aria-live="polite"></p>
 
     <div id="account-body" hidden>
+      <p class="status status--error" id="account-notice" role="alert" hidden data-i18n="account.revoked">Этот браузер больше не привязан к вашему аккаунту: на нём задан пароль. Войдите ниже по ID и паролю.</p>
+
       <form id="nick-form">
         <h3 data-i18n="account.nick.title">Никнейм</h3>
         <div class="row">
@@ -45,8 +47,30 @@
         <button class="btn btn--sm" type="button" id="account-id-toggle">Показать</button>
         <button class="btn btn--sm" type="button" id="account-id-copy">Копировать</button>
       </div>
-      <p class="muted small" data-i18n="account.id.warn">ID выдан вам автоматически при первом заходе и хранится в cookie этого браузера. Он работает как пароль: по нему видны ваш никнейм и переписка с поддержкой. Никому его не показывайте.</p>
+      <p class="muted small" data-i18n="account.id.warn">ID выдан вам автоматически при первом заходе. Пока пароль не задан, ID работает как пароль: по нему видны ваш никнейм и переписка с поддержкой, поэтому никому его не показывайте. Когда пароль задан, ID служит логином: чтобы войти с другого устройства, нужны и ID, и пароль.</p>
       </div>
+
+      <form class="panel-block" id="password-form">
+        <h3 data-i18n="account.pw.title">Пароль</h3>
+        <p class="muted small" id="password-hint"></p>
+        <input class="visually-hidden" id="pw-username" type="text" name="username" autocomplete="username" tabindex="-1" aria-hidden="true" readonly>
+        <div id="pw-fields">
+          <div class="field" id="pw-current-field" hidden>
+            <label for="pw-current" data-i18n="account.pw.current">Текущий пароль</label>
+            <input class="input" id="pw-current" type="password" autocomplete="current-password" maxlength="128">
+          </div>
+          <div class="field">
+            <label for="pw-new" data-i18n="account.pw.new">Новый пароль</label>
+            <input class="input" id="pw-new" type="password" autocomplete="new-password" minlength="8" maxlength="128" required>
+          </div>
+          <div class="field">
+            <label for="pw-repeat" data-i18n="account.pw.repeat">Повторите пароль</label>
+            <input class="input" id="pw-repeat" type="password" autocomplete="new-password" minlength="8" maxlength="128" required>
+          </div>
+          <button class="btn btn--primary" type="submit" id="pw-save">Задать пароль</button>
+        </div>
+        <p class="status" id="pw-status" role="status" aria-live="polite"></p>
+      </form>
 
       <div class="panel-block" id="staff-block" hidden>
         <h3 data-i18n="account.staff.title">Администратор поддержки</h3>
@@ -55,12 +79,16 @@
 
       <form class="panel-block" id="restore-form">
         <h3 data-i18n="account.restore.title">Войти по ID</h3>
-        <p class="muted small" data-i18n="account.restore.hint">Есть аккаунт на другом устройстве или вы очистили cookie? Введите его ID, и этот браузер станет тем же аккаунтом: с тем же никнеймом и перепиской.</p>
-        <div class="row">
-          <label class="visually-hidden" for="restore-input" data-i18n="account.restore.label">ID</label>
-          <input class="input" id="restore-input" type="password" autocomplete="off" spellcheck="false" maxlength="128" required>
-          <button class="btn" type="submit" id="restore-send" data-i18n="btn.restore">Войти</button>
+        <p class="muted small" data-i18n="account.restore.hint">Есть аккаунт на другом устройстве или вы очистили cookie? Введите его ID (и пароль, если он задан), и этот браузер станет тем же аккаунтом: с тем же никнеймом и перепиской.</p>
+        <div class="field">
+          <label for="restore-input" data-i18n="account.restore.label">ID</label>
+          <input class="input" id="restore-input" type="text" name="username" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false" maxlength="128" required>
         </div>
+        <div class="field">
+          <label for="restore-password" data-i18n="account.restore.password">Пароль (если задан)</label>
+          <input class="input" id="restore-password" type="password" name="password" autocomplete="current-password" maxlength="128">
+        </div>
+        <button class="btn" type="submit" id="restore-send" data-i18n="btn.restore">Войти</button>
         <p class="status" id="restore-status" role="status" aria-live="polite"></p>
       </form>
     </div>
@@ -89,10 +117,25 @@
   var nickInput = $('#nick-input');
   var nickSave = $('#nick-save');
   var nickStatus = $('#nick-status');
+  var restorePassword = $('#restore-password');
+  var notice = $('#account-notice');
+  var pwForm = $('#password-form');
+  var pwHint = $('#password-hint');
+  var pwUser = $('#pw-username');
+  var pwFields = $('#pw-fields');
+  var pwCurrentField = $('#pw-current-field');
+  var pwCurrent = $('#pw-current');
+  var pwNew = $('#pw-new');
+  var pwRepeat = $('#pw-repeat');
+  var pwSave = $('#pw-save');
+  var pwStatus = $('#pw-status');
+
+  var PASSWORD_MIN = 8;
 
   var currentId = '';
   var currentProfile = { number: null, nickname: null };
   var currentSupport = false;
+  var currentPassword = { set: false, mine: false };
   var idShown = false;
 
   function renderId() {
@@ -115,6 +158,31 @@
     staffBlock.hidden = !currentSupport;
   }
 
+  // Блок «Пароль»: три состояния — пароля нет (задать), пароль есть и это его вход (сменить), пароль задан на другом входе.
+  function renderPassword() {
+    pwUser.value = currentId;
+    var set = currentPassword.set;
+    var mine = currentPassword.mine;
+    pwHint.textContent = I.t(!set ? 'account.pw.hint.none' : mine ? 'account.pw.hint.set' : 'account.pw.hint.other');
+    pwFields.hidden = set && !mine;
+    pwCurrentField.hidden = !(set && mine);
+    pwCurrent.required = set && mine;
+    pwSave.textContent = I.t(set ? 'btn.pw.change' : 'btn.pw.set');
+  }
+
+  function applyState(state) {
+    currentId = state.playerId;
+    currentProfile = state.profile;
+    currentSupport = !!state.support;
+    currentPassword = state.password || { set: false, mine: false };
+    notice.hidden = !state.signedOut;
+    renderNick();
+    renderId();
+    renderStaff();
+    renderPassword();
+    document.dispatchEvent(new CustomEvent('yablonya:state', { detail: state }));
+  }
+
   function loadAccount() {
     accountBody.hidden = true;
 
@@ -127,17 +195,12 @@
     Y.backend()
       .then(function (b) {
         return b.init(Y.currentPrefs()).then(function (state) {
-          currentId = state.playerId;
-          currentProfile = state.profile;
-          currentSupport = !!state.support;
           idShown = false;
           setStatus(nickStatus, '', '');
-          renderNick();
-          renderId();
-          renderStaff();
+          setStatus(pwStatus, '', '');
+          applyState(state);
           setStatus(accountStatus, '', '');
           accountBody.hidden = false;
-          document.dispatchEvent(new CustomEvent('yablonya:state', { detail: state }));
         });
       })
       .catch(function (err) {
@@ -149,8 +212,47 @@
   $('#account-btn').addEventListener('click', function () {
     setStatus(restoreStatus, '', '');
     restoreInput.value = '';
+    restorePassword.value = '';
     accountDialog.showModal();
     loadAccount();
+  });
+
+  // Задать пароль (если его нет) или сменить (если есть).
+  pwForm.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var wasSet = currentPassword.set;
+    var current = pwCurrent.value;
+    var next = pwNew.value;
+
+    if (next.length < PASSWORD_MIN) { setStatus(pwStatus, 'error', I.t('pw.short', { n: PASSWORD_MIN })); return; }
+    if (next !== pwRepeat.value) { setStatus(pwStatus, 'error', I.t('pw.mismatch')); return; }
+    if (next === currentId) { setStatus(pwStatus, 'error', I.t('pw.weak')); return; }
+
+    pwSave.disabled = true;
+    setStatus(pwStatus, '', I.t('support.loading'));
+
+    Y.backend()
+      .then(function (b) {
+        return (wasSet ? b.changePassword(current, next) : b.setPassword(next)).then(function (result) {
+          if (result !== 'ok') {
+            setStatus(pwStatus, 'error', I.t('pw.' + result, { n: PASSWORD_MIN }));
+            return null;
+          }
+          return b.init(Y.currentPrefs());
+        });
+      })
+      .then(function (state) {
+        if (!state) return;
+        pwCurrent.value = pwNew.value = pwRepeat.value = '';
+        applyState(state);
+        setStatus(pwStatus, 'ok', I.t(wasSet ? 'pw.changed' : 'pw.saved'));
+      })
+      .catch(function (err) {
+        console.error(err);
+        var text = err && err.code === 'auth/operation-not-allowed' ? I.t('pw.disabled') : Y.explain(err, 'pw.error');
+        setStatus(pwStatus, 'error', text);
+      })
+      .then(function () { pwSave.disabled = false; });
   });
 
   nickForm.addEventListener('submit', function (e) {
@@ -194,10 +296,11 @@
     setStatus(restoreStatus, '', I.t('support.loading'));
 
     Y.backend()
-      .then(function (b) { return b.useId(value); })
+      .then(function (b) { return b.useId(value, restorePassword.value); })
       .then(function (result) {
         var ok = result === 'player';
         setStatus(restoreStatus, ok ? 'ok' : 'error', I.t('restore.' + result));
+        restorePassword.value = '';
         if (ok) { restoreInput.value = ''; loadAccount(); }
       })
       .catch(function (err) {
@@ -210,5 +313,6 @@
   document.addEventListener('yablonya:lang', function () {
     renderNickPlaceholder();
     renderId();
+    renderPassword();
   });
 })();
