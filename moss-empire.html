@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="ru" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title data-i18n="title.moss">Империя Мха — Яблоня</title>
+  <meta name="description" content="Империя Мха — реал-лайф проект студии «Яблоня» по выращиванию мха.">
+  <link rel="icon" type="image/png" href="img/favicon.png">
+  <link rel="stylesheet" href="css/style.css">
+  <script src="js/init.js"></script>
+</head>
+<body>
+
+  <header class="topbar">
+    <a class="btn" href="index.html">← <span data-i18n="btn.back">В главное меню</span></a>
+    <div class="topbar__actions">
+      <button class="btn btn--icon" type="button" data-lang-toggle>EN</button>
+      <button class="btn btn--icon" type="button" data-theme-toggle>☾</button>
+    </div>
+  </header>
+
+  <main class="page">
+    <div class="page__head">
+      <h1 data-i18n="moss.title">Империя Мха</h1>
+      <p data-i18n="moss.lead">Реал-лайф проект по выращиванию мха. Это не игра, поэтому скачивать здесь нечего.</p>
+    </div>
+
+    <figure class="moss-hero">
+      <img src="img/moss.webp" width="515" height="388" alt="Мох крупным планом" data-i18n-attr="alt:moss.photo.alt">
+    </figure>
+
+    <section class="section" aria-labelledby="about-title">
+      <h2 id="about-title" data-i18n="moss.about.title">О проекте</h2>
+      <p data-i18n="moss.about.text">Мы выращиваем настоящий мох и ведём этот проект как большую кампанию: с целями, этапами и отчётами. Здесь будут фотографии мха и рассказы о том, как идут дела.</p>
+    </section>
+
+    <!-- Посты про проект: читают все, пишут администраторы (поле admin в базе). -->
+    <section class="section" aria-labelledby="progress-title">
+      <div class="section__bar">
+        <h2 id="progress-title" data-i18n="moss.progress.title">Как продвигается</h2>
+        <button class="btn btn--primary" type="button" id="post-new" hidden data-i18n="post.write">Написать пост</button>
+      </div>
+      <p class="lang-note" data-i18n="posts.note">Посты на этой странице написаны по-русски.</p>
+      <p class="status" id="posts-status" role="status" aria-live="polite"></p>
+      <div class="posts" id="posts"></div>
+      <p class="empty" id="posts-empty" data-i18n="moss.progress.empty">Первые записи о ходе проекта появятся здесь.</p>
+    </section>
+  </main>
+
+  <!-- Редактор поста (только для администраторов) -->
+  <dialog class="modal" id="post-dialog" aria-labelledby="post-dialog-title">
+    <div class="modal__inner">
+      <div class="modal__head">
+        <h2 id="post-dialog-title"></h2>
+        <button class="btn btn--icon btn--sm" type="button" data-close data-i18n-attr="aria-label:btn.close" aria-label="Закрыть">✕</button>
+      </div>
+      <form id="post-form">
+        <div class="field">
+          <label for="post-title" data-i18n="post.title">Заголовок</label>
+          <input class="input" id="post-title" type="text" maxlength="120" required>
+        </div>
+        <div class="field">
+          <label for="post-text" data-i18n="post.text">Текст</label>
+          <textarea class="textarea" id="post-text" maxlength="8000" required style="min-height:240px"></textarea>
+        </div>
+        <p class="muted small" data-i18n="post.text.hint">Абзацы разделяйте пустой строкой. Пост увидят все посетители сайта.</p>
+        <button class="btn btn--primary" type="submit" id="post-save" data-i18n="post.publish">Опубликовать</button>
+        <p class="status" id="post-status" role="status" aria-live="polite"></p>
+      </form>
+    </div>
+  </dialog>
+
+  <script src="js/i18n.js"></script>
+  <script src="js/main.js"></script>
+  <script src="js/fx.js"></script>
+  <script src="js/firebase-config.js"></script>
+  <script src="js/moss.js"></script>
+</body>
+</html>

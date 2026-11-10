@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="ru" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title data-i18n="title.projects">Проекты — Яблоня</title>
+  <meta name="description" content="Игры студии «Яблоня»: скриншоты и скачивание для Windows, Linux, macOS и Android, а также версии для браузера.">
+  <link rel="icon" type="image/png" href="img/favicon.png">
+  <link rel="stylesheet" href="css/style.css">
+  <script src="js/init.js"></script>
+</head>
+<body>
+
+  <header class="topbar">
+    <a class="btn" href="index.html">← <span data-i18n="btn.back">В главное меню</span></a>
+    <div class="topbar__actions">
+      <button class="btn btn--icon" type="button" data-lang-toggle>EN</button>
+      <button class="btn btn--icon" type="button" data-theme-toggle>☾</button>
+    </div>
+  </header>
+
+  <main class="page">
+    <div class="page__head">
+      <h1 data-i18n="projects.title">Проекты</h1>
+      <p data-i18n="projects.lead">Игры студии. Нажмите на игру, чтобы посмотреть скриншоты и скачать её.</p>
+    </div>
+
+    <div class="games" id="games"></div>
+    <p class="empty" id="games-empty" hidden data-i18n="projects.empty">Игры скоро появятся.</p>
+  </main>
+
+  <!-- Окно игры: галерея, кнопки скачивания, «Играть в браузере» -->
+  <dialog class="modal" id="game-dialog" aria-labelledby="game-title">
+    <div class="modal__inner">
+      <div class="modal__head">
+        <h2 id="game-title"></h2>
+        <button class="btn btn--icon btn--sm" type="button" data-close data-i18n-attr="aria-label:btn.close" aria-label="Закрыть">✕</button>
+      </div>
+      <div class="gallery" id="game-gallery"></div>
+      <p id="game-desc" class="muted" style="margin-top:1rem"></p>
+      <div class="downloads" id="game-downloads"></div>
+      <div id="game-hints"></div>
+    </div>
+  </dialog>
+
+  <script src="js/i18n.js"></script>
+  <script src="js/main.js"></script>
+  <script src="js/fx.js"></script>
+  <script src="js/firebase-config.js"></script>
+  <script src="js/links.js"></script>
+  <script src="js/projects.js"></script>
+</body>
+</html>

@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ru" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title data-i18n="title.news">Новости — Яблоня</title>
+  <meta name="description" content="Новости игровой студии «Яблоня»: что нового, лайки и комментарии.">
+  <link rel="icon" type="image/png" href="img/favicon.png">
+  <link rel="stylesheet" href="css/style.css">
+  <script src="js/init.js"></script>
+</head>
+<body>
+
+  <header class="topbar">
+    <a class="btn" href="index.html">← <span data-i18n="btn.back">В главное меню</span></a>
+    <div class="topbar__actions">
+      <!-- «+» видна только администраторам: открывает страницу для написания новостей -->
+      <a class="btn btn--plus" id="news-add" href="news-editor.html" hidden
+         data-i18n-attr="aria-label:btn.news.add;title:btn.news.add" aria-label="Написать новость" title="Написать новость"><span aria-hidden="true">+</span></a>
+      <button class="btn btn--grow" type="button" id="account-btn" data-i18n="btn.account">Аккаунт</button>
+      <button class="btn btn--icon" type="button" data-lang-toggle>EN</button>
+      <button class="btn btn--icon" type="button" data-theme-toggle>☾</button>
+    </div>
+  </header>
+
+  <main class="page">
+    <div class="page__head">
+      <h1 data-i18n="news.title">Новости Яблони</h1>
+      <p data-i18n="news.lead">Что нового в студии. Новости можно оценивать и обсуждать в комментариях.</p>
+    </div>
+
+    <p class="lang-note" data-i18n="posts.note">Посты на этой странице написаны по-русски.</p>
+
+    <p class="status" id="news-status" role="status" aria-live="polite"></p>
+    <div class="news" id="news"></div>
+    <p class="empty" id="news-empty" data-i18n="news.empty">Новостей пока нет.</p>
+  </main>
+
+  <script src="js/i18n.js"></script>
+  <script src="js/main.js"></script>
+  <script src="js/fx.js"></script>
+  <script src="js/firebase-config.js"></script>
+  <script src="js/account.js"></script>
+  <script src="js/news.js"></script>
+</body>
+</html>

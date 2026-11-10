@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ru" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title data-i18n="title.editor">Написать новость — Яблоня</title>
+  <link rel="icon" type="image/png" href="img/favicon.png">
+  <link rel="stylesheet" href="css/style.css">
+  <script src="js/init.js"></script>
+</head>
+<body>
+
+  <header class="topbar">
+    <a class="btn" href="index.html">← <span data-i18n="btn.back">В главное меню</span></a>
+    <div class="topbar__actions">
+      <a class="btn" href="news.html" data-i18n="editor.view">Открыть новости</a>
+      <button class="btn btn--icon" type="button" data-lang-toggle>EN</button>
+      <button class="btn btn--icon" type="button" data-theme-toggle>☾</button>
+    </div>
+  </header>
+
+  <main class="page">
+    <div class="page__head">
+      <h1 data-i18n="editor.title">Написать новость</h1>
+      <p data-i18n="editor.lead">Эту страницу видят только администраторы. Опубликованное появится на странице «Новости Яблони».</p>
+    </div>
+
+    <p class="status" id="editor-status" role="status" aria-live="polite"></p>
+
+    <div id="editor-body" hidden>
+      <form class="editor-form" id="news-form">
+        <h2 id="form-heading"></h2>
+        <div class="field">
+          <label for="news-title" data-i18n="post.title">Заголовок</label>
+          <input class="input" id="news-title" type="text" maxlength="120" required>
+        </div>
+        <div class="field">
+          <label for="news-text" data-i18n="post.text">Текст</label>
+          <textarea class="textarea" id="news-text" maxlength="10000" required style="min-height:260px"></textarea>
+        </div>
+        <p class="muted small" data-i18n="post.text.hint">Абзацы разделяйте пустой строкой. Пост увидят все посетители сайта.</p>
+        <div class="row">
+          <button class="btn btn--primary" type="submit" id="news-save" data-i18n="post.publish">Опубликовать</button>
+          <button class="btn" type="button" id="news-cancel" hidden data-i18n="editor.cancel">Отменить правку</button>
+        </div>
+        <p class="status" id="form-status" role="status" aria-live="polite"></p>
+      </form>
+
+      <section class="section" aria-labelledby="published-title">
+        <h2 id="published-title" data-i18n="editor.list">Опубликованные новости</h2>
+        <div class="posts" id="editor-list"></div>
+        <p class="empty" id="editor-empty" data-i18n="editor.none">Опубликованных новостей пока нет.</p>
+      </section>
+    </div>
+  </main>
+
+  <script src="js/i18n.js"></script>
+  <script src="js/main.js"></script>
+  <script src="js/fx.js"></script>
+  <script src="js/firebase-config.js"></script>
+  <script src="js/news-editor.js"></script>
+</body>
+</html>

@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="ru" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title data-i18n="title.menu">Яблоня — игровая студия</title>
+  <meta name="description" content="Яблоня — игровая студия. Скачайте наши игры, познакомьтесь с командой и узнайте про Империю Мха.">
+  <link rel="icon" type="image/png" href="img/favicon.png">
+  <link rel="stylesheet" href="css/style.css">
+  <script src="js/init.js"></script>
+</head>
+<body class="page-menu">
+
+  <header class="topbar">
+    <a class="brand" href="index.html">
+      <img src="img/logo.png" width="56" height="56" alt="">
+      <span>
+        <span class="brand__name" data-i18n="studio.name">Яблоня</span><br>
+        <span class="brand__tag" data-i18n="studio.tagline">Игровая студия</span>
+      </span>
+    </a>
+
+    <div class="topbar__actions">
+      <button class="btn btn--grow" type="button" id="account-btn" data-i18n="btn.account">Аккаунт</button>
+      <button class="btn btn--grow btn--primary" type="button" id="support-btn" data-i18n="btn.support">Обратиться в поддержку</button>
+      <button class="btn btn--icon" type="button" data-lang-toggle>EN</button>
+      <button class="btn btn--icon" type="button" data-theme-toggle>☾</button>
+    </div>
+  </header>
+
+  <main class="menu">
+    <div class="menu__hero">
+      <h1 data-i18n="studio.name">Яблоня</h1>
+      <p data-i18n="studio.tagline">Игровая студия</p>
+    </div>
+
+    <nav class="tiles" data-i18n-attr="aria-label:menu.nav" aria-label="Разделы сайта">
+      <a class="tile" href="projects.html">
+        <img class="tile__img" src="img/menu/projects.webp" width="960" height="540" alt="">
+        <span class="tile__title" data-i18n="menu.projects">Проекты</span>
+        <span class="tile__sub" data-i18n="menu.projects.sub">Игры студии и скачивание</span>
+      </a>
+      <a class="tile" href="team.html">
+        <img class="tile__img" src="img/menu/team.webp" width="768" height="432" alt="">
+        <span class="tile__title" data-i18n="menu.team">О команде</span>
+        <span class="tile__sub" data-i18n="menu.team.sub">Кто делает наши игры</span>
+      </a>
+      <a class="tile tile--news" href="news.html">
+        <img class="tile__img" src="img/menu/news.webp" width="960" height="540" alt="">
+        <span class="tile__title" data-i18n="menu.news">Новости Яблони</span>
+        <span class="tile__sub" data-i18n="menu.news.sub">Что нового в студии</span>
+      </a>
+      <a class="tile tile--moss" href="moss-empire.html">
+        <img class="tile__img" src="img/moss.webp" width="515" height="388" alt="">
+        <span class="tile__title" data-i18n="menu.moss">Империя Мха</span>
+        <span class="tile__sub" data-i18n="menu.moss.sub">Реал-лайф проект по выращиванию мха</span>
+      </a>
+    </nav>
+  </main>
+
+  <!-- Поддержка для игрока: один сплошной чат со всеми администраторами. Других игроков в нём нет. -->
+  <dialog class="modal modal--chat" id="support-dialog" aria-labelledby="support-title">
+    <div class="modal__inner">
+      <div class="modal__head">
+        <h2 id="support-title" data-i18n="support.title">Поддержка</h2>
+        <button class="btn btn--icon btn--sm" type="button" data-close data-i18n-attr="aria-label:btn.close" aria-label="Закрыть">✕</button>
+      </div>
+      <p class="muted small" data-i18n="chat.lead">Это общий чат с администраторами: вам может ответить любой из них. Другие игроки ваших сообщений не видят.</p>
+      <div class="chat-log" id="chat-log" role="log" aria-live="polite"></div>
+      <p class="status" id="chat-status" role="status" aria-live="polite"></p>
+      <form class="chat-form" id="chat-form">
+        <label class="visually-hidden" for="chat-input" data-i18n="chat.placeholder">Ваше сообщение</label>
+        <textarea class="textarea" id="chat-input" rows="2" maxlength="2000" required
+                  data-i18n-attr="placeholder:chat.placeholder" placeholder="Ваше сообщение"></textarea>
+        <button class="btn btn--primary" type="submit" id="chat-send" data-i18n="btn.send">Отправить</button>
+      </form>
+      <p class="muted small" data-i18n="chat.hint">Enter — отправить, Shift+Enter — новая строка.</p>
+    </div>
+  </dialog>
+
+  <!-- Для администраторов: слева чаты игроков, справа переписка с выбранным игроком. -->
+  <dialog class="modal modal--wide" id="admin-dialog" aria-labelledby="admin-title">
+    <div class="modal__inner">
+      <div class="modal__head">
+        <h2 id="admin-title" data-i18n="answer.title">Вопросы игроков</h2>
+        <button class="btn btn--icon btn--sm" type="button" data-close data-i18n-attr="aria-label:btn.close" aria-label="Закрыть">✕</button>
+      </div>
+      <p class="status" id="admin-status" role="status" aria-live="polite"></p>
+      <div class="admin-chat" id="admin-chat" data-view="list">
+        <section class="admin-chat__list" aria-labelledby="admin-list-title">
+          <h3 class="visually-hidden" id="admin-list-title" data-i18n="answer.list">Чаты</h3>
+          <label class="row">
+            <input type="checkbox" id="admin-filter">
+            <span data-i18n="answer.filter">Только без ответа</span>
+          </label>
+          <ul class="chat-list" id="admin-list"></ul>
+          <p class="empty" id="admin-empty" hidden data-i18n="answer.empty">Пока никто не писал.</p>
+        </section>
+        <section class="admin-chat__thread" aria-label="Переписка">
+          <div class="thread-head">
+            <button class="btn btn--sm admin-chat__back" type="button" id="admin-back" data-i18n="answer.back">← К списку</button>
+            <strong id="admin-thread-title"></strong>
+          </div>
+          <p class="muted" id="admin-pick" data-i18n="answer.pick">Выберите чат из списка.</p>
+          <div class="chat-log" id="admin-log" role="log" aria-live="polite" hidden></div>
+          <form class="chat-form" id="admin-form" hidden>
+            <label class="visually-hidden" for="admin-input" data-i18n="answer.placeholder">Ответ игроку</label>
+            <textarea class="textarea" id="admin-input" rows="2" maxlength="2000" required
+                      data-i18n-attr="placeholder:answer.placeholder" placeholder="Ответ игроку"></textarea>
+            <button class="btn btn--primary" type="submit" id="admin-send" data-i18n="btn.send">Отправить</button>
+          </form>
+        </section>
+      </div>
+    </div>
+  </dialog>
+
+
+  <script src="js/i18n.js"></script>
+  <script src="js/main.js"></script>
+  <script src="js/fx.js"></script>
+  <script src="js/firebase-config.js"></script>
+  <script src="js/account.js"></script>
+  <script src="js/chat.js"></script>
+</body>
+</html>

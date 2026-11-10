@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="ru" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title data-i18n="title.team">О команде — Яблоня</title>
+  <meta name="description" content="Команда игровой студии «Яблоня» и почта для сотрудничества.">
+  <link rel="icon" type="image/png" href="img/favicon.png">
+  <link rel="stylesheet" href="css/style.css">
+  <script src="js/init.js"></script>
+</head>
+<body>
+
+  <header class="topbar">
+    <a class="btn" href="index.html">← <span data-i18n="btn.back">В главное меню</span></a>
+    <div class="topbar__actions">
+      <button class="btn btn--icon" type="button" data-lang-toggle>EN</button>
+      <button class="btn btn--icon" type="button" data-theme-toggle>☾</button>
+    </div>
+  </header>
+
+  <main class="page">
+    <div class="page__head">
+      <h1 data-i18n="team.title">О команде</h1>
+      <p data-i18n="team.lead">Люди, которые делают игры студии «Яблоня».</p>
+    </div>
+
+    <div class="team" id="team"></div>
+    <p class="empty" id="team-empty" hidden data-i18n="team.empty">Список участников скоро появится.</p>
+
+    <section class="section" aria-labelledby="contact-title">
+      <h2 id="contact-title" data-i18n="team.contact.title">Сотрудничество</h2>
+      <p id="team-contact"></p>
+    </section>
+  </main>
+
+  <!-- Окно участника: фото и подробное описание -->
+  <dialog class="modal modal--member" id="member-dialog" aria-labelledby="member-name">
+    <div class="modal__inner">
+      <div class="modal__head">
+        <h2 id="member-name"></h2>
+        <button class="btn btn--icon btn--sm" type="button" data-close data-i18n-attr="aria-label:btn.close" aria-label="Закрыть">✕</button>
+      </div>
+      <div class="member-detail">
+        <img class="member-detail__photo" id="member-photo" alt="" width="720" height="960">
+        <div>
+          <p class="member-detail__short" id="member-short"></p>
+          <div class="member-detail__about" id="member-about"></div>
+          <ul class="member__links" id="member-links" hidden data-i18n-attr="aria-label:team.links" aria-label="Ссылки"></ul>
+        </div>
+      </div>
+    </div>
+  </dialog>
+
+  <script src="js/i18n.js"></script>
+  <script src="js/main.js"></script>
+  <script src="js/fx.js"></script>
+  <script src="js/firebase-config.js"></script>
+  <script src="js/team.js"></script>
+</body>
+</html>
