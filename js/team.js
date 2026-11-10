@@ -16,6 +16,21 @@ var TEAM_PLACEHOLDER = 'img/team/placeholder.jpg';
 
 var TEAM = [
   {
+    name: { ru: 'Яблоня', en: 'Yablonya' },
+    short: { ru: 'Эта студия', en: 'This studio' },
+    about: {
+      ru: 'Я и есть эта студия. Во мне создаются все эти произведения искусства. Мой центральный офис — это гараж термального.\n\n' +
+          'У меня нет ни любимого числа, ни любимого блюда, ничего.',
+      en: 'I am this studio. All these works of art are created inside me. My central office is Termalny’s garage.\n\n' +
+          'I have no favorite number, no favorite dish, nothing.'
+    },
+    photo: 'img/team/yablonya.jpg',   // логотип студии на тёмно-синем фоне
+    links: [
+      { label: 'YouTube', url: 'https://www.youtube.com/channel/UCGXKR_hv7bKAzCnguxYiYMg' },
+      { label: 'Telegram', url: 'https://t.me/YablonyaStudio' }
+    ]
+  },
+  {
     name: { ru: 'Инь-Ян Кон-Дао', en: 'Yin-Yang Kon-Dao' },
     short: { ru: 'Создатель студии «Яблоня»', en: 'Founder of the “Yablonya” studio' },
     about: {
