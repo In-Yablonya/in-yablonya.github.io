@@ -12,7 +12,8 @@
  *  4. Сохраните файл и обновите страницу «Проекты» (Ctrl+F5). Нажмите кнопку и проверьте,
  *     что файл скачивается. Все ссылки сразу можно проверить командой в папке сайта:
  *         node .claude/check-links.js
- *  5. Отправьте изменения на сайт. GitHub Pages обновится сам через минуту-две.
+ *  5. Отправьте изменения на сайт: дважды щёлкните по publish.bat в папке сайта. Он спросит описание
+ *     изменения и всё отправит. GitHub Pages обновится сам через минуту-две.
  * └──────────────────────────────────────────────────────────────────────────────┘
  *
  * ПРАВИЛА
@@ -37,11 +38,11 @@ var GAME_LINKS = {
 
   // ShootIn
   'shootin': {
-    windows: 'https://github.com/svetlyi072-debug/shootin/releases/download/v1.1.0/ShootIn-1.1.0-Setup.exe',
-    linux:   'https://github.com/svetlyi072-debug/shootin/releases/download/v1.1.0/ShootIn-1.1.0-linux-x86_64.tar.gz',
-    macos:   'https://github.com/svetlyi072-debug/shootin/releases/download/v1.1.0/ShootIn-1.1.0-macos.zip',
-    android: 'https://github.com/svetlyi072-debug/shootin/releases/download/v1.1.0/ShootIn-1.1.0-android.apk',
-    web:     'https://lovely-malabi-8071c9.netlify.app/'
+    windows: 'https://github.com/svetlyi072-debug/shootin/releases/download/v1.2.0/ShootIn-1.2.0-Setup.exe',
+    linux:   'https://github.com/svetlyi072-debug/shootin/releases/download/v1.2.0/ShootIn-1.2.0-linux-x86_64-portable',
+    macos:   'https://github.com/svetlyi072-debug/shootin/releases/download/v1.2.0/ShootIn-1.2.0-macos.zip',
+    android: 'https://github.com/svetlyi072-debug/shootin/releases/download/v1.2.0/ShootIn-1.2.0-android.apk',
+    web:     'https://lovely-malabi-8071c9.netlify.app/',
   },
 
   // be_bees
