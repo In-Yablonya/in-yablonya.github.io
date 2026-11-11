@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="ru" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title data-i18n="title.reviews">Отзывы — Яблоня</title>
+  <meta name="description" content="Отзывы об игровой студии «Яблоня»: оценка звёздами и комментарии игроков.">
+  <link rel="icon" type="image/png" href="img/favicon.png">
+  <link rel="stylesheet" href="css/style.css">
+  <script src="js/init.js"></script>
+</head>
+<body>
+
+  <header class="topbar">
+    <a class="btn" href="index.html">← <span data-i18n="btn.back">В главное меню</span></a>
+    <div class="topbar__actions">
+      <button class="btn btn--grow" type="button" id="account-btn" data-i18n="btn.account">Аккаунт</button>
+      <button class="btn btn--icon" type="button" data-lang-toggle>EN</button>
+      <button class="btn btn--icon" type="button" data-theme-toggle>☾</button>
+    </div>
+  </header>
+
+  <main class="page">
+    <div class="page__head">
+      <h1 data-i18n="reviews.title">Отзывы</h1>
+      <p data-i18n="reviews.lead">Поставьте оценку звёздами и, если хотите, напишите пару слов. Отзывы можно отфильтровать: положительные, критические или по числу звёзд.</p>
+    </div>
+
+    <p class="status" id="rv-status" role="status" aria-live="polite"></p>
+
+    <!-- Сводка: средняя оценка и число отзывов по звёздам (строки со звёздами работают как фильтр) -->
+    <section class="rv-summary" aria-labelledby="rv-filter-title">
+      <div class="rv-avg">
+        <div class="rv-avg__num" id="rv-avg-num">–</div>
+        <div id="rv-avg-stars"></div>
+        <p class="rv-avg__count" id="rv-avg-count"></p>
+      </div>
+      <div>
+        <h2 class="rv-filter-title" id="rv-filter-title" data-i18n="reviews.filter.title">Какие отзывы показать</h2>
+        <div class="row rv-presets" id="rv-presets" role="group" data-i18n-attr="aria-label:reviews.filter.title" aria-label="Какие отзывы показать"></div>
+        <div class="rv-bars" id="rv-bars" role="group" data-i18n-attr="aria-label:reviews.stars.hint" aria-label="Фильтр по звёздам"></div>
+        <p class="muted small" data-i18n="reviews.stars.hint">Нажмите на строку со звёздами, чтобы показать только такие отзывы. Можно выбрать несколько.</p>
+      </div>
+    </section>
+
+    <!-- Свой отзыв: оценка звёздами и необязательный комментарий -->
+    <section class="editor-form" aria-labelledby="rv-form-title">
+      <h2 id="rv-form-title" data-i18n="reviews.form.new">Ваш отзыв</h2>
+      <form id="rv-form" novalidate>
+        <fieldset class="star-picker">
+          <legend data-i18n="reviews.rating">Оценка</legend>
+          <div class="star-picker__row" id="rv-picker"></div>
+        </fieldset>
+        <div class="field">
+          <label for="rv-text" data-i18n="reviews.comment">Комментарий (по желанию)</label>
+          <textarea class="textarea" id="rv-text" maxlength="1000" rows="4"
+                    data-i18n-attr="placeholder:reviews.comment.placeholder" placeholder="Что понравилось, а что нет?"></textarea>
+        </div>
+        <p class="muted small" data-i18n="reviews.comment.hint">Один аккаунт — один отзыв: если отправить ещё раз, он заменится. Имя в отзыве берётся из «Аккаунта».</p>
+        <div class="row">
+          <button class="btn btn--primary" type="submit" id="rv-send" data-i18n="reviews.send">Отправить отзыв</button>
+          <button class="btn" type="button" id="rv-delete-mine" hidden data-i18n="reviews.delete.mine">Удалить мой отзыв</button>
+        </div>
+        <p class="status" id="rv-form-status" role="status" aria-live="polite"></p>
+      </form>
+    </section>
+
+    <section aria-labelledby="rv-list-title">
+      <div class="section__bar">
+        <h2 id="rv-list-title" data-i18n="reviews.title">Отзывы</h2>
+        <div class="row">
+          <label for="rv-sort" class="muted small" data-i18n="reviews.sort">Порядок</label>
+          <select class="input rv-sort" id="rv-sort">
+            <option value="new" data-i18n="reviews.sort.new">Сначала новые</option>
+            <option value="old" data-i18n="reviews.sort.old">Сначала старые</option>
+            <option value="high" data-i18n="reviews.sort.high">Сначала с высокой оценкой</option>
+            <option value="low" data-i18n="reviews.sort.low">Сначала с низкой оценкой</option>
+          </select>
+        </div>
+      </div>
+      <p class="muted small" id="rv-shown" aria-live="polite"></p>
+      <div class="reviews" id="rv-list"></div>
+      <p class="empty" id="rv-empty">Отзывов пока нет. Станьте первым!</p>
+    </section>
+  </main>
+
+  <script src="js/i18n.js"></script>
+  <script src="js/main.js"></script>
+  <script src="js/fx.js"></script>
+  <script src="js/firebase-config.js"></script>
+  <script src="js/account.js"></script>
+  <script src="js/reviews.js"></script>
+</body>
+</html>

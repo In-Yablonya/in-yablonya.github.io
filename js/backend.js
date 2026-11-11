@@ -709,3 +709,78 @@ export async function deleteNews(id) {
     [`newsReactions/${id}`]: null
   });
 }
+
+// ---------- «Отзывы» ----------
+// reviews/<ключ>      — отзыв: rating (1–5), text (по желанию), name, createdAt, updatedAt. Читают все.
+// reviewOwner/<ключ>  — ID игрока-автора (закрытая запись): по ней правила пускают править и удалять свой отзыв.
+// Ключ — хэш ID игрока, а не сам ID (ID работает как пароль и в открытых данных светиться не должен).
+// Ключ у игрока один, поэтому отзыв у него один: повторная отправка меняет его, а не добавляет второй.
+
+export const REVIEW_TEXT_MAX = 1000;
+
+async function reviewKey() {
+  const bytes = new TextEncoder().encode(`yablonya-review:${playerId}`);
+  const hash = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 32);
+}
+
+// Все отзывы (обновляются сами): [{ id, rating, text, name, createdAt, updatedAt, mine }].
+// Возвращает функцию «отписаться».
+export function watchReviews(onChange, onError) {
+  let unsubscribe = null;
+  let stopped = false;
+  reviewKey().then((mine) => {
+    if (stopped) return;
+    unsubscribe = onValue(
+      ref(db, 'reviews'),
+      (snap) => {
+        const all = snap.val() || {};
+        onChange(Object.keys(all).map((id) => ({
+          id,
+          rating: Number(all[id].rating) || 0,
+          text: all[id].text || '',
+          name: all[id].name || '',
+          createdAt: all[id].createdAt || 0,
+          updatedAt: all[id].updatedAt || 0,
+          mine: id === mine
+        })).filter((r) => r.rating >= 1 && r.rating <= 5));
+      },
+      (err) => { if (onError) onError(err); }
+    );
+  }).catch((err) => { if (onError) onError(err); });
+  return () => { stopped = true; if (unsubscribe) unsubscribe(); };
+}
+
+// Оставляет отзыв или меняет свой. Возвращает 'created' | 'updated'.
+export async function saveReview(rating, text, name) {
+  await requireStarted();
+  const stars = Number(rating);
+  if (!Number.isInteger(stars) || stars < 1 || stars > 5) throw new Error('bad-rating');
+  const clean = String(text || '').trim().slice(0, REVIEW_TEXT_MAX);
+  const author = String(name || '').trim().slice(0, 40) || 'User';
+  const key = await reviewKey();
+
+  if ((await get(ref(db, `reviews/${key}`))).exists()) {
+    await update(ref(db, `reviews/${key}`), { rating: stars, text: clean || null, name: author, updatedAt: serverTimestamp() });
+    return 'updated';
+  }
+  const review = { rating: stars, name: author, createdAt: serverTimestamp() };
+  if (clean) review.text = clean;
+  // Владельца записываем в том же запросе, что и сам отзыв: правила проверяют их вместе.
+  await update(ref(db), { [`reviewOwner/${key}`]: playerId, [`reviews/${key}`]: review });
+  return 'created';
+}
+
+// Удаляет свой отзыв.
+export async function deleteMyReview() {
+  await requireStarted();
+  const key = await reviewKey();
+  await update(ref(db), { [`reviews/${key}`]: null, [`reviewOwner/${key}`]: null });
+}
+
+// Только администраторы: убрать чужой отзыв.
+export async function deleteReview(key) {
+  await requireStarted();
+  if (!support) throw new Error('not-admin');
+  await remove(ref(db, `reviews/${key}`));
+}

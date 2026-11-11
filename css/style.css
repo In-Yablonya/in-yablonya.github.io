@@ -121,6 +121,7 @@ body.page-menu .brand { color: #fff; }
 
 /* Четвёртая плитка («Новости Яблони») стоит под плиткой «О команде»; «Империя Мха» остаётся в первом ряду справа. */
 @media (min-width: 761px) {
+  .tile--reviews { grid-column: 1; grid-row: 2; }   /* «Отзывы»: под «Проектами», слева от «Новостей Яблони» */
   .tile--news { grid-column: 2; grid-row: 2; }
   .tile--moss { grid-column: 3; grid-row: 1; }
 }
@@ -300,6 +301,59 @@ html[lang="ru"] .lang-note { display: none; }
 .editor-form { margin-bottom: 1.5rem; padding: 1.1rem 1.25rem; background: var(--surface); border: 1px solid var(--border); border-radius: 18px; }
 .editor-form h2 { font-size: 1.3rem; }
 
+/* ---------- отзывы ---------- */
+.stars { display: inline-flex; gap: .1em; font-size: 1.15rem; line-height: 1; }
+.stars__s { color: var(--border); }
+.stars__s.is-on { color: var(--orange); }
+
+.rv-summary {
+  display: grid; grid-template-columns: minmax(150px, 210px) 1fr; gap: 1.25rem 2rem; align-items: center;
+  margin-bottom: 1.5rem; padding: 1.1rem 1.25rem;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 18px; box-shadow: var(--shadow);
+}
+.rv-avg { text-align: center; }
+.rv-avg__num { font-size: 3.2rem; font-weight: 800; line-height: 1; }
+.rv-avg .stars { margin-top: .4rem; font-size: 1.5rem; }
+.rv-avg__count { margin: .4rem 0 0; color: var(--muted); }
+.rv-filter-title { margin: 0 0 .5rem; font-size: 1rem; }
+.rv-presets { margin-bottom: .75rem; }
+.rv-preset.is-active { background: var(--orange); color: var(--orange-ink); border-color: transparent; }
+.rv-bars { display: grid; gap: .2rem; margin-bottom: .5rem; }
+.rv-bar {
+  display: grid; grid-template-columns: 3rem 1fr 2.2rem; align-items: center; gap: .6rem;
+  padding: .3rem .5rem; text-align: left;
+  background: none; color: var(--text); font: inherit; cursor: pointer;
+  border: 1px solid transparent; border-radius: 10px;
+}
+.rv-bar:hover { border-color: var(--border); }
+.rv-bar[aria-pressed="true"] { border-color: var(--orange); background: var(--surface-2); }
+.rv-bar__label { font-weight: 700; white-space: nowrap; }
+.rv-bar__track { display: block; height: .65rem; background: var(--surface-2); border-radius: 999px; overflow: hidden; }
+.rv-bar[aria-pressed="true"] .rv-bar__track { background: var(--bg); }
+.rv-bar__fill { display: block; height: 100%; background: var(--orange); border-radius: 999px; }
+.rv-bar__n { color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+
+.star-picker { margin: 0 0 1rem; padding: 0; border: 0; }
+.star-picker legend { padding: 0; margin-bottom: .2rem; font-weight: 600; }
+.star-picker__row { display: inline-flex; gap: .1rem; }
+.star-picker input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.star-picker__star { padding: 0 .12rem; font-size: 2.4rem; line-height: 1.1; color: var(--border); cursor: pointer; }
+.star-picker__star.is-on { color: var(--orange); }
+.star-picker input:focus-visible + .star-picker__star { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 8px; }
+
+.rv-sort { width: auto; min-width: 12rem; }
+.reviews { display: grid; gap: 1rem; }
+.review { padding: 1rem 1.15rem; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow); }
+.review--mine { border-color: var(--orange); }
+.review__head { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem .75rem; }
+.review__meta { margin: .15rem 0 0; color: var(--muted); font-size: .85rem; }
+.review__text { margin: .6rem 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.review .row { margin-top: .6rem; }
+
+@media (max-width: 640px) {
+  .rv-summary { grid-template-columns: 1fr; }
+}
+
 /* ---------- команда ---------- */
 .team { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1.25rem; }
 .member {
@@ -382,6 +436,7 @@ dialog.modal--member { width: min(780px, calc(100vw - 1.5rem)); }
   .anim-on .tiles .tile:nth-child(2), .anim-on .games .game-card:nth-child(2), .anim-on .team .member:nth-child(2) { animation-delay: .16s; }
   .anim-on .tiles .tile:nth-child(3), .anim-on .games .game-card:nth-child(3), .anim-on .team .member:nth-child(3) { animation-delay: .24s; }
   .anim-on .tiles .tile:nth-child(4), .anim-on .games .game-card:nth-child(4), .anim-on .team .member:nth-child(4) { animation-delay: .32s; }
+  .anim-on .tiles .tile:nth-child(5), .anim-on .team .member:nth-child(5) { animation-delay: .4s; }
   .anim-on .games .game-card:nth-child(n+5), .anim-on .team .member:nth-child(n+5) { animation-delay: .4s; }
 
   /* Окна и тёмная подложка */
