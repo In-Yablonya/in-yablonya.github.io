@@ -1,6 +1,45 @@
 # Рабочая папка с исходными картинками: сайт берёт готовые файлы из img/
 texturs/
 
+# ---------- СЕКРЕТЫ: никогда не отправляются на GitHub ----------
+# Пароли и ключи доступа
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+*.keystore
+*.jks
+id_rsa*
+id_ed25519*
+# Ключи служебных аккаунтов Firebase / Google Cloud и файлы с учётными данными
+*service-account*.json
+*serviceAccount*.json
+*credentials*.json
+*secret*.json
+*secrets*.json
+.runtimeconfig.json
+# Журналы и кэш Firebase CLI (в журналах бывают адреса почты и токены)
+firebase-debug.log
+firebase-debug.*.log
+ui-debug.log
+database-debug.log
+.firebase/
+*.log
+
+# ---------- Личные настройки, не относящиеся к сайту ----------
+# В .claude/ в репозитории лежат только инструменты сайта (serve.js, check-links.js, login-email.js, launch.json).
+# Личные настройки и память помощника сюда не попадают.
+.claude/settings.local.json
+.claude/*.local.*
+.claude/projects/
+.claude/memory/
+.claude/worktrees/
+.vscode/
+.idea/
+node_modules/
+
 # Ярлыки Windows и служебные файлы системы
 *.lnk
 Thumbs.db
