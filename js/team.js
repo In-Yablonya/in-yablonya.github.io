@@ -26,7 +26,7 @@ var TEAM = [
     },
     photo: 'img/team/yablonya.jpg',   // логотип студии на тёмно-синем фоне
     links: [
-      { label: 'YouTube', url: 'https://www.youtube.com/channel/UCGXKR_hv7bKAzCnguxYiYMg' },
+      { label: 'YouTube', url: 'https://www.youtube.com/@game-rm7jk' },
       { label: 'Telegram', url: 'https://t.me/YablonyaStudio' }
     ]
   },
