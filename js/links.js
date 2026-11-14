@@ -66,4 +66,8 @@ var GAME_LINKS = {
     web: 'https://soft-twilight-3d3b54.netlify.app/'
   }
 
+  // BAAALS! — игру ещё не выложили, поэтому записи пока нет: в окне игры написано «ещё не выложили».
+  // Когда будет готово, добавьте после запятой блок по образцу выше, например:
+  //   ,'baaals': { windows: 'https://github.com/…', web: 'https://….netlify.app/' }
+
 };

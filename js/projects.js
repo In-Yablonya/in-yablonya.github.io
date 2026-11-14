@@ -75,6 +75,19 @@ var GAMES = [
       'img/games/agraft18/screen-1.jpg',
       'img/games/agraft18/screen-2.jpg'
     ]
+  },
+  {
+    id: 'baaals',
+    title: { ru: 'BAAALS!', en: 'BAAALS!' },
+    description: {
+      ru: 'Наша команда, как обычно, взяла заезженную идею и превратила её во что-то своё. Вот поганцы! BAAALS! — это те же шарики, но теперь на бильярдном столе, и они рикошетят. Короче, сами зырьте.',
+      en: 'As usual, our team took a well-worn idea and turned it into something of its own. Rascals! BAAALS! is the same balls, but now on a billiard table, and they ricochet. Anyway, see for yourself.'
+    },
+    cover: 'img/games/baaals/icon.jpg',
+    screenshots: [
+      'img/games/baaals/screen-1.jpg',
+      'img/games/baaals/screen-2.jpg'
+    ]
   }
 ];
 
@@ -181,6 +194,10 @@ var GAMES = [
     });
     if (has(links, 'web')) {
       dDownloads.append(downloadButton(I.t('dl.web'), links.web, 'btn--cyan', false));
+    }
+    // Ссылок ещё нет (игру пока не выложили) — вместо пустого места поясняем.
+    if (!dDownloads.children.length) {
+      dDownloads.append(h('p', { class: 'muted', text: I.t('game.soon') }));
     }
 
     if (has(links, 'windows')) dHints.append(hint('hint.windows'));
