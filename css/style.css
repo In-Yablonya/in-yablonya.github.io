@@ -148,6 +148,12 @@ body.page-menu .btn--plus { color: #fff; }
   padding: 1.5rem; border: 2px dashed var(--border); border-radius: 16px;
   color: var(--muted); text-align: center;
 }
+/* «Загружаем…» вместо «пока ничего нет»: пока данные идут из базы, пустого списка не показываем */
+.empty.is-loading { border-style: solid; }
+.empty.is-loading::before {
+  content: ''; display: inline-block; width: .95em; height: .95em; margin-right: .6em; vertical-align: -.12em;
+  border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%;
+}
 
 /* ---------- карточки игр ---------- */
 .games { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 1.25rem; }
@@ -428,6 +434,8 @@ dialog.modal--member { width: min(780px, calc(100vw - 1.5rem)); }
   @keyframes spin { to { transform: rotate(360deg); } }
   @keyframes shimmer { to { background-position: 300% 0; } }
   @keyframes react-pop { 0% { transform: scale(1); } 40% { transform: scale(1.35) rotate(-8deg); } 100% { transform: scale(1); } }
+
+  .empty.is-loading::before { animation: spin .8s linear infinite; }
 
   /* Появление блоков при загрузке страницы, по очереди (включается флагом .anim-on из js/init.js) */
   .anim-on .page__head, .anim-on .menu__hero, .anim-on .section { animation: rise .6s cubic-bezier(.2, .7, .2, 1) backwards; }

@@ -30,6 +30,14 @@
   var reactions = {};           // id новости -> { likes, dislikes, mine }
   var nodes = {};               // id новости -> элементы карточки (чтобы не терять набранный текст)
 
+  // Что уже есть: данные из кэша браузера или из базы. Пока новостей нет совсем, страница пишет «Загружаем…»,
+  // а не «Новостей пока нет»: человек не должен подумать, что их нет, и уйти.
+  var ready = { news: false, comments: false, reactions: false };
+  var live = { reactions: false };   // свои оценки известны только из базы: в кэше их нет
+  var failed = false;                // база не отвечает: «Загружаем…» больше не пишем
+  var slowShown = false;
+  var slowTimer = null;
+
   function setStatus(kind, text) {
     statusEl.textContent = text || '';
     statusEl.className = 'status' + (kind ? ' status--' + kind : '');
@@ -38,6 +46,60 @@
   function fail(err) {
     console.error(err);
     setStatus('error', Y.explain(err, 'news.error'));
+  }
+
+  function loadFail(err) {
+    console.error(err);
+    failed = true;
+    slowShown = false;
+    setStatus('error', Y.explain(err, 'news.loadError'));
+    syncAll();
+  }
+
+  // Подпись под списком: «Загружаем…», «Новостей пока нет» или ничего (список есть, либо загрузка не удалась).
+  function renderEmpty() {
+    var loading = Y.firebaseConfigured() && !ready.news && !failed;
+    var none = !posts.length && (ready.news || !Y.firebaseConfigured());
+    emptyEl.hidden = !(loading || none);
+    emptyEl.classList.toggle('is-loading', loading);
+    var key = loading ? 'news.loading' : 'news.empty';
+    emptyEl.setAttribute('data-i18n', key);
+    emptyEl.textContent = I.t(key);
+  }
+
+  // Новости из кэша: показываем сразу, пока база ещё отвечает. Пустой кэш ничего не говорит, его пропускаем.
+  function useCache() {
+    var cachedPosts = Y.cache.get('news');
+    if (!cachedPosts || !cachedPosts.length) return;
+    posts = cachedPosts;
+    ready.news = true;
+    var cachedComments = Y.cache.get('newsComments');
+    if (cachedComments) { comments = cachedComments; ready.comments = true; }
+    var cachedReactions = Y.cache.get('newsReactions');
+    if (cachedReactions) { reactions = cachedReactions; ready.reactions = true; }
+  }
+
+  // В кэш уходят только счётчики: «моя оценка» принадлежит человеку, а не новости.
+  function withoutMine(byPost) {
+    var result = {};
+    Object.keys(byPost).forEach(function (id) {
+      result[id] = { likes: byPost[id].likes, dislikes: byPost[id].dislikes, mine: null };
+    });
+    return result;
+  }
+
+  // Если база молчит дольше обычного (плохая связь), говорим об этом, а не крутим «Загружаем…» молча.
+  function watchSlow() {
+    slowTimer = setTimeout(function () {
+      if (ready.news || failed) return;
+      slowShown = true;
+      setStatus('', I.t('load.slow'));
+    }, 10000);
+  }
+
+  function gotNews() {
+    if (slowTimer) { clearTimeout(slowTimer); slowTimer = null; }
+    if (slowShown) { slowShown = false; setStatus('', ''); }
   }
 
   function dateOnly(ts) {
@@ -119,8 +181,8 @@
 
   function updateReactions(n) {
     var r = reactions[n.id] || { likes: 0, dislikes: 0, mine: null };
-    n.likeCount.textContent = r.likes;
-    n.dislikeCount.textContent = r.dislikes;
+    n.likeCount.textContent = ready.reactions ? r.likes : '…';
+    n.dislikeCount.textContent = ready.reactions ? r.dislikes : '…';
     n.like.setAttribute('aria-pressed', r.mine === 'like' ? 'true' : 'false');
     n.dislike.setAttribute('aria-pressed', r.mine === 'dislike' ? 'true' : 'false');
     n.like.classList.toggle('is-active', r.mine === 'like');
@@ -128,7 +190,7 @@
   }
 
   function react(n, value) {
-    if (!api) return;
+    if (!api || !live.reactions) return;
     var current = (reactions[n.id] || {}).mine || null;
     api.setReaction(n.id, value, current).catch(fail);
   }
@@ -187,6 +249,12 @@
   }
 
   function updateComments(n) {
+    if (!ready.comments) {          // комментарии ещё идут: не пишем «пока нет» и не называем число
+      n.toggle.textContent = I.t('news.comments.label');
+      n.list.textContent = '';
+      n.list.append(h('p', { class: 'muted small', text: I.t('news.comments.loading') }));
+      return;
+    }
     var list = comments[n.id] || [];
     n.toggle.textContent = I.t('news.comments', { n: list.length });
     n.list.textContent = '';
@@ -209,7 +277,8 @@
 
   // ---------- общий список ----------
   function syncAll() {
-    emptyEl.hidden = posts.length > 0;
+    renderEmpty();
+    if (slowShown) setStatus('', I.t('load.slow'));     // язык мог смениться
     var ids = posts.map(function (p) { return p.id; });
     Object.keys(nodes).forEach(function (id) {
       if (ids.indexOf(id) < 0) { nodes[id].el.remove(); delete nodes[id]; }
@@ -225,8 +294,11 @@
   }
 
   function start() {
+    useCache();
+    syncAll();
     if (!Y.firebaseConfigured()) return;      // без Firebase остаётся «Новостей пока нет»
 
+    watchSlow();
     Y.backend()
       .then(function (b) {
         return b.init(Y.currentPrefs()).then(function (state) {
@@ -234,16 +306,25 @@
           isAdmin = !!state.support;
           myName = Y.displayName(state.profile);
           document.dispatchEvent(new CustomEvent('yablonya:state', { detail: state }));
-          var loadFail = function (err) { console.error(err); setStatus('error', Y.explain(err, 'news.loadError')); };
-          b.watchNews(function (list) { posts = list; syncAll(); }, loadFail);
-          b.watchNewsComments(function (byPost) { comments = byPost; syncAll(); }, loadFail);
-          b.watchNewsReactions(function (byPost) { reactions = byPost; syncAll(); }, loadFail);
+          b.watchNews(function (list) {
+            posts = list; ready.news = true; failed = false;
+            Y.cache.set('news', list);
+            gotNews();
+            syncAll();
+          }, loadFail);
+          b.watchNewsComments(function (byPost) {
+            comments = byPost; ready.comments = true;
+            Y.cache.set('newsComments', byPost);
+            syncAll();
+          }, loadFail);
+          b.watchNewsReactions(function (byPost) {
+            reactions = byPost; ready.reactions = true; live.reactions = true;
+            Y.cache.set('newsReactions', withoutMine(byPost));
+            syncAll();
+          }, loadFail);
         });
       })
-      .catch(function (err) {
-        console.error(err);
-        setStatus('error', Y.explain(err, 'news.loadError'));
-      });
+      .catch(loadFail);
   }
 
   document.addEventListener('yablonya:lang', syncAll);

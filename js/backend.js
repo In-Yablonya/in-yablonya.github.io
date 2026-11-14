@@ -1,6 +1,7 @@
 /*
  * Связь с Firebase: анонимный вход, ID игрока, никнейм, чат с поддержкой, права администратора.
- * Это ES-модуль: он загружается только когда игрок открывает «Аккаунт» или «Обратиться в поддержку».
+ * Это ES-модуль: он загружается, когда игрок открывает «Аккаунт» или «Обратиться в поддержку», открывает «Новости»,
+ * «Отзывы» или «Империю Мха», а также в простое после загрузки любой страницы (предзагрузка, см. prefetch в конце файла).
  *
  * Как устроен ID:
  *  - Firebase при первом заходе выдаёт анонимному игроку длинный случайный uid. Он и есть ID игрока.
@@ -502,20 +503,22 @@ export async function sendAdminMessage(pid, text, name, nick) {
 export function watchPosts(onChange, onError) {
   return onValue(
     ref(db, 'mossPosts'),
-    (snap) => {
-      const all = snap.val() || {};
-      const list = Object.keys(all).map((id) => ({
-        id,
-        title: all[id].title || '',
-        text: all[id].text || '',
-        author: all[id].author || '',
-        createdAt: all[id].createdAt || 0,
-        updatedAt: all[id].updatedAt || 0
-      }));
-      onChange(list.sort((a, b) => b.createdAt - a.createdAt));
-    },
+    (snap) => onChange(postsFrom(snap.val())),
     (err) => { if (onError) onError(err); }
   );
+}
+
+// Посты (и «Империи Мха», и новости) из того, что лежит в базе: список, свежие сверху.
+function postsFrom(value) {
+  const all = value || {};
+  return Object.keys(all).map((id) => ({
+    id,
+    title: all[id].title || '',
+    text: all[id].text || '',
+    author: all[id].author || '',
+    createdAt: all[id].createdAt || 0,
+    updatedAt: all[id].updatedAt || 0
+  })).sort((a, b) => b.createdAt - a.createdAt);
 }
 
 function cleanPost(title, text) {
@@ -569,47 +572,53 @@ async function voterKey() {
 export function watchNews(onChange, onError) {
   return onValue(
     ref(db, 'news'),
-    (snap) => {
-      const all = snap.val() || {};
-      const list = Object.keys(all).map((id) => ({
-        id,
-        title: all[id].title || '',
-        text: all[id].text || '',
-        author: all[id].author || '',
-        createdAt: all[id].createdAt || 0,
-        updatedAt: all[id].updatedAt || 0
-      }));
-      onChange(list.sort((a, b) => b.createdAt - a.createdAt));
-    },
+    (snap) => onChange(postsFrom(snap.val())),
     (err) => { if (onError) onError(err); }
   );
 }
 
 // Комментарии всех новостей: { <id новости>: [комментарии по времени] }.
+function commentsFrom(value) {
+  const all = value || {};
+  const byPost = {};
+  Object.keys(all).forEach((post) => {
+    byPost[post] = Object.keys(all[post]).map((id) => ({
+      id,
+      text: all[post][id].text || '',
+      name: all[post][id].name || '',
+      role: all[post][id].role === 'admin' ? 'admin' : 'user',
+      parent: all[post][id].parent || null,
+      replyTo: all[post][id].replyTo || '',
+      createdAt: all[post][id].createdAt || 0
+    })).sort((a, b) => a.createdAt - b.createdAt);
+  });
+  return byPost;
+}
+
 export function watchNewsComments(onChange, onError) {
   return onValue(
     ref(db, 'newsComments'),
-    (snap) => {
-      const all = snap.val() || {};
-      const byPost = {};
-      Object.keys(all).forEach((post) => {
-        byPost[post] = Object.keys(all[post]).map((id) => ({
-          id,
-          text: all[post][id].text || '',
-          name: all[post][id].name || '',
-          role: all[post][id].role === 'admin' ? 'admin' : 'user',
-          parent: all[post][id].parent || null,
-          replyTo: all[post][id].replyTo || '',
-          createdAt: all[post][id].createdAt || 0
-        })).sort((a, b) => a.createdAt - b.createdAt);
-      });
-      onChange(byPost);
-    },
+    (snap) => onChange(commentsFrom(snap.val())),
     (err) => { if (onError) onError(err); }
   );
 }
 
 // Лайки и дизлайки: { <id новости>: { likes, dislikes, mine: 'like' | 'dislike' | null } }.
+// mine — оценка этого игрока (его ключ voterKey); без ключа (null) остаётся null.
+function reactionsFrom(value, mine) {
+  const all = value || {};
+  const result = {};
+  Object.keys(all).forEach((post) => {
+    const votes = all[post];
+    result[post] = {
+      likes: Object.values(votes).filter((v) => v === 'like').length,
+      dislikes: Object.values(votes).filter((v) => v === 'dislike').length,
+      mine: (mine && votes[mine]) || null
+    };
+  });
+  return result;
+}
+
 export function watchNewsReactions(onChange, onError) {
   let unsubscribe = null;
   let stopped = false;
@@ -617,19 +626,7 @@ export function watchNewsReactions(onChange, onError) {
     if (stopped) return;
     unsubscribe = onValue(
       ref(db, 'newsReactions'),
-      (snap) => {
-        const all = snap.val() || {};
-        const result = {};
-        Object.keys(all).forEach((post) => {
-          const votes = all[post];
-          result[post] = {
-            likes: Object.values(votes).filter((v) => v === 'like').length,
-            dislikes: Object.values(votes).filter((v) => v === 'dislike').length,
-            mine: votes[mine] || null
-          };
-        });
-        onChange(result);
-      },
+      (snap) => onChange(reactionsFrom(snap.val(), mine)),
       (err) => { if (onError) onError(err); }
     );
   }).catch((err) => { if (onError) onError(err); });
@@ -724,8 +721,22 @@ async function reviewKey() {
   return Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 32);
 }
 
-// Все отзывы (обновляются сами): [{ id, rating, text, name, createdAt, updatedAt, mine }].
-// Возвращает функцию «отписаться».
+// Отзывы из того, что лежит в базе: [{ id, rating, text, name, createdAt, updatedAt, mine }].
+// mine — отзыв этого игрока (его ключ reviewKey); без ключа (null) ни один отзыв «моим» не считается.
+function reviewsFrom(value, mine) {
+  const all = value || {};
+  return Object.keys(all).map((id) => ({
+    id,
+    rating: Number(all[id].rating) || 0,
+    text: all[id].text || '',
+    name: all[id].name || '',
+    createdAt: all[id].createdAt || 0,
+    updatedAt: all[id].updatedAt || 0,
+    mine: !!mine && id === mine
+  })).filter((r) => r.rating >= 1 && r.rating <= 5);
+}
+
+// Все отзывы (обновляются сами). Возвращает функцию «отписаться».
 export function watchReviews(onChange, onError) {
   let unsubscribe = null;
   let stopped = false;
@@ -733,18 +744,7 @@ export function watchReviews(onChange, onError) {
     if (stopped) return;
     unsubscribe = onValue(
       ref(db, 'reviews'),
-      (snap) => {
-        const all = snap.val() || {};
-        onChange(Object.keys(all).map((id) => ({
-          id,
-          rating: Number(all[id].rating) || 0,
-          text: all[id].text || '',
-          name: all[id].name || '',
-          createdAt: all[id].createdAt || 0,
-          updatedAt: all[id].updatedAt || 0,
-          mine: id === mine
-        })).filter((r) => r.rating >= 1 && r.rating <= 5));
-      },
+      (snap) => onChange(reviewsFrom(snap.val(), mine)),
       (err) => { if (onError) onError(err); }
     );
   }).catch((err) => { if (onError) onError(err); });
@@ -776,6 +776,32 @@ export async function deleteMyReview() {
   await requireStarted();
   const key = await reviewKey();
   await update(ref(db), { [`reviews/${key}`]: null, [`reviewOwner/${key}`]: null });
+}
+
+// ---------- предзагрузка ----------
+// Тихо читает разовыми запросами (без подписки) то, что показывают страницы «Новости», «Отзывы» и «Империя Мха»,
+// и по одной части отдаёт в onPart(имя, данные). main.js кладёт их в кэш браузера, и эти страницы открываются сразу.
+// «Личных» признаков (свой отзыв, своя оценка) в этих данных нет: они считаются, когда страница подключается по-настоящему.
+const PREFETCH_PARTS = {
+  news: ['news', (value) => postsFrom(value)],
+  newsComments: ['newsComments', (value) => commentsFrom(value)],
+  newsReactions: ['newsReactions', (value) => reactionsFrom(value, null)],
+  reviews: ['reviews', (value) => reviewsFrom(value, null)],
+  mossPosts: ['mossPosts', (value) => postsFrom(value)]
+};
+
+export async function prefetch(names, onPart) {
+  await requireStarted();
+  for (const name of names) {
+    const part = PREFETCH_PARTS[name];
+    if (!part) continue;
+    try {
+      onPart(name, part[1]((await get(ref(db, part[0]))).val()));
+    } catch (err) {
+      console.warn('Предзагрузка не удалась:', name, err && err.code);   // это не мешает остальным частям
+    }
+    await new Promise((resolve) => setTimeout(resolve, 150));           // не торопимся: страница важнее
+  }
 }
 
 // Только администраторы: убрать чужой отзыв.

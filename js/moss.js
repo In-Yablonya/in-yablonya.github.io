@@ -30,9 +30,47 @@
   var posts = [];
   var editing = null;          // редактируемый пост или null для нового
 
+  // Что уже есть: посты из кэша браузера или из базы. Пока их нет совсем, страница пишет «Загружаем…»,
+  // а не «Первые записи появятся здесь»: человек не должен подумать, что записей нет, и уйти.
+  var ready = false;
+  var failed = false;          // база не отвечает: «Загружаем…» больше не пишем
+  var slowShown = false;
+  var slowTimer = null;
+  var renderedKey = null;      // что нарисовано сейчас: одинаковые данные заново не рисуем (иначе записи мигают)
+
   function setStatus(el, kind, text) {
     el.textContent = text || '';
     el.className = 'status' + (kind ? ' status--' + kind : '');
+  }
+
+  function loadFail(err) {
+    console.error(err);
+    failed = true;
+    slowShown = false;
+    setStatus(statusEl, 'error', Y.explain(err, 'post.loadError'));
+    renderPosts();
+  }
+
+  // Посты из кэша: показываем сразу, пока база ещё отвечает. Пустой кэш ничего не говорит, его пропускаем.
+  function useCache() {
+    var cached = Y.cache.get('mossPosts');
+    if (!cached || !cached.length) return;
+    posts = cached;
+    ready = true;
+  }
+
+  // Если база молчит дольше обычного (плохая связь), говорим об этом, а не крутим «Загружаем…» молча.
+  function watchSlow() {
+    slowTimer = setTimeout(function () {
+      if (ready || failed) return;
+      slowShown = true;
+      setStatus(statusEl, '', I.t('load.slow'));
+    }, 10000);
+  }
+
+  function gotPosts() {
+    if (slowTimer) { clearTimeout(slowTimer); slowTimer = null; }
+    if (slowShown) { slowShown = false; setStatus(statusEl, '', ''); }
   }
 
   function dateOnly(ts) {
@@ -44,8 +82,20 @@
 
   // ---------- список постов ----------
   function renderPosts() {
+    // Подпись под списком: «Загружаем…», «записи появятся здесь» или ничего (записи есть, либо загрузка не удалась).
+    var configured = Y.firebaseConfigured();
+    var loading = configured && !ready && !failed;
+    var none = !posts.length && (ready || !configured);
+    emptyEl.hidden = !(loading || none);
+    emptyEl.classList.toggle('is-loading', loading);
+    var key = loading ? 'moss.loading' : 'moss.progress.empty';
+    emptyEl.setAttribute('data-i18n', key);
+    emptyEl.textContent = I.t(key);
+
+    var drawn = JSON.stringify([posts, isAdmin, I.lang]);
+    if (drawn === renderedKey) return;
+    renderedKey = drawn;
     postsEl.textContent = '';
-    emptyEl.hidden = posts.length > 0;
 
     posts.forEach(function (p) {
       var meta = dateOnly(p.createdAt);
@@ -125,8 +175,11 @@
 
   // ---------- подключение ----------
   function start() {
+    useCache();
+    renderPosts();
     if (!Y.firebaseConfigured()) return;      // без Firebase остаётся надпись «записи появятся здесь»
 
+    watchSlow();
     Y.backend()
       .then(function (b) {
         return b.init(Y.currentPrefs()).then(function (state) {
@@ -136,18 +189,14 @@
           newBtn.hidden = !isAdmin;
           document.dispatchEvent(new CustomEvent('yablonya:state', { detail: state }));
           b.watchPosts(function (list) {
-            posts = list;
+            posts = list; ready = true; failed = false;
+            Y.cache.set('mossPosts', list);
+            gotPosts();
             renderPosts();
-          }, function (err) {
-            console.error(err);
-            setStatus(statusEl, 'error', Y.explain(err, 'post.loadError'));
-          });
+          }, loadFail);
         });
       })
-      .catch(function (err) {
-        console.error(err);
-        setStatus(statusEl, 'error', Y.explain(err, 'post.loadError'));
-      });
+      .catch(loadFail);
   }
 
   document.addEventListener('yablonya:lang', function () {

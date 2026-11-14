@@ -1,6 +1,6 @@
 /*
  * Общее для всех страниц: переключатели темы и языка, окна <dialog>,
- * вспомогательные функции и ленивая загрузка Firebase (js/backend.js).
+ * вспомогательные функции, загрузка Firebase (js/backend.js) и кэш данных с тихой предзагрузкой в простое.
  */
 (function () {
   'use strict';
@@ -151,21 +151,64 @@
     return I.t('user.default', { n: profile.number != null ? profile.number : '' }).trim();
   }
 
-  // Первый заход: ID выдаётся сам, без нажатий. Если cookie с ID уже есть, Firebase не грузим —
-  // он подключится позже, когда понадобится (аккаунт, поддержка).
-  function hasIdCookie() {
-    return /(?:^|;\s*)yablonya_id=[^;]+/.test(document.cookie);
+  // ---------- кэш данных (новости, отзывы, посты) ----------
+  // Данные «Новостей», «Отзывов» и «Империи Мха» лежат в базе, и первый ответ приходит не сразу.
+  // Поэтому их заранее, пока человек читает другие страницы, кладут в кэш браузера (localStorage):
+  // страница при открытии рисует то, что лежит в кэше, а свежие данные из базы подменяют его через мгновение.
+  // В кэше только публичные данные; «своё» (свой отзыв, своя оценка) в нём не хранится.
+  var CACHE_PREFIX = 'yablonya.cache.';
+  var CACHE_MAX_AGE = 30 * 24 * 3600 * 1000;      // совсем старый кэш не показываем
+  var CACHE_MAX_SIZE = 900000;                    // символов на одну запись: localStorage небольшой
+  var PREFETCH_FRESH = 60 * 1000;                 // что обновлялось недавно, второй раз не читаем
+  var PREFETCH_PARTS = ['news', 'newsComments', 'newsReactions', 'reviews', 'mossPosts'];
+
+  var cache = {
+    entry: function (name) {
+      try {
+        var e = JSON.parse(localStorage.getItem(CACHE_PREFIX + name));
+        if (e && e.v === 1 && typeof e.at === 'number' && Date.now() - e.at < CACHE_MAX_AGE) return e;
+      } catch (err) { /* кэша нет или он испорчен */ }
+      return null;
+    },
+    get: function (name) {
+      var e = cache.entry(name);
+      return e ? e.data : null;
+    },
+    age: function (name) {
+      var e = cache.entry(name);
+      return e ? Date.now() - e.at : Infinity;
+    },
+    set: function (name, data) {
+      try {
+        var raw = JSON.stringify({ v: 1, at: Date.now(), data: data });
+        if (raw.length > CACHE_MAX_SIZE) localStorage.removeItem(CACHE_PREFIX + name);
+        else localStorage.setItem(CACHE_PREFIX + name, raw);
+      } catch (err) { /* нет места или хранилище закрыто: страница просто загрузится как обычно */ }
+    }
+  };
+
+  // Предзагрузка: в простое, после загрузки страницы, и маленькими порциями.
+  // Она же при первом заходе выдаёт ID (b.init), поэтому подключаемся и тогда, когда данные не нужны.
+  function prefetchData() {
+    var conn = navigator.connection;
+    var saving = !!(conn && conn.saveData);                    // человек включил экономию трафика: данные не тянем
+    var stale = saving ? [] : PREFETCH_PARTS.filter(function (name) { return cache.age(name) > PREFETCH_FRESH; });
+    var hasId = /(?:^|;\s*)yablonya_id=[^;]+/.test(document.cookie);
+    if (!stale.length && hasId) return;                        // и ID уже есть, и кэш свежий: Firebase не нужен
+
+    backend()
+      .then(function (b) {
+        return b.init(window.Yablonya.currentPrefs()).then(function () {
+          if (stale.length) return b.prefetch(stale, function (name, data) { cache.set(name, data); });
+        });
+      })
+      .catch(function (err) { console.warn('Предзагрузка не удалась:', err && err.message); });
   }
 
   window.addEventListener('load', function () {
-    if (!firebaseConfigured() || hasIdCookie()) return;
-    var issue = function () {
-      backend()
-        .then(function (b) { return b.init(window.Yablonya.currentPrefs()); })
-        .catch(function (err) { console.warn('ID пока не выдан:', err && err.message); });
-    };
-    if (window.requestIdleCallback) window.requestIdleCallback(issue, { timeout: 3000 });
-    else setTimeout(issue, 1500);
+    if (!firebaseConfigured()) return;
+    if (window.requestIdleCallback) window.requestIdleCallback(prefetchData, { timeout: 4000 });
+    else setTimeout(prefetchData, 1500);
   });
 
   // Если Firebase уже загружен, сообщаем ему о смене языка/темы (чтобы сохранить в players/<id>).
@@ -182,6 +225,7 @@
     wireDialog: wireDialog,
     firebaseConfigured: firebaseConfigured,
     backend: backend,
+    cache: cache,
     displayName: displayName,
     adminHint: adminHint,
     explain: explain,

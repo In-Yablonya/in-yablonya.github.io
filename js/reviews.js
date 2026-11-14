@@ -52,6 +52,16 @@
   var formTouched = false;        // человек уже правит форму: не затираем её при обновлении данных
   var pickerEls = [];
 
+  // Что уже есть: отзывы из кэша браузера или из базы. Пока их нет совсем, страница пишет «Загружаем…»,
+  // а не «Отзывов пока нет»: человек не должен подумать, что их нет, и уйти.
+  var ready = false;              // список отзывов уже есть (из кэша или из базы)
+  var failed = false;             // база не отвечает: «Загружаем…» больше не пишем
+  var slowShown = false;
+  var slowTimer = null;
+
+  // Данные ещё идут: надписи «пока нет» не показываем.
+  function loadingNow() { return !ready && !failed && Y.firebaseConfigured(); }
+
   function setStatus(el, kind, text) {
     el.textContent = text || '';
     el.className = 'status' + (kind ? ' status--' + kind : '');
@@ -132,7 +142,9 @@
     avgNum.textContent = total ? number1(avg) : '–';
     avgStars.textContent = '';
     if (total) avgStars.append(stars(Math.round(avg), I.t('reviews.avg.aria', { n: number1(avg) })));
-    avgCount.textContent = total ? countText(total) : I.t('reviews.avg.none');
+    avgCount.textContent = total ? countText(total)
+      : loadingNow() ? I.t('reviews.loading')
+      : (ready || !Y.firebaseConfigured()) ? I.t('reviews.avg.none') : '';
 
     barsEl.textContent = '';
     [5, 4, 3, 2, 1].forEach(function (n) {
@@ -202,8 +214,38 @@
     shown.forEach(function (r) { listEl.append(reviewEl(r)); });
 
     shownEl.textContent = reviews.length ? I.t('reviews.shown', { n: shown.length, total: reviews.length }) : '';
-    emptyEl.hidden = shown.length > 0;
-    emptyEl.textContent = I.t(reviews.length ? 'reviews.empty.filtered' : 'reviews.empty');
+
+    var waiting = !ready && Y.firebaseConfigured();         // отзывов пока нет, потому что они ещё не пришли
+    emptyEl.classList.toggle('is-loading', loadingNow());
+    if (waiting) {
+      emptyEl.hidden = failed;                              // загрузка не удалась: об этом скажет надпись об ошибке
+      emptyEl.textContent = I.t('reviews.loading');
+    } else {
+      emptyEl.hidden = shown.length > 0;
+      emptyEl.textContent = I.t(reviews.length ? 'reviews.empty.filtered' : 'reviews.empty');
+    }
+  }
+
+  // Отзывы из кэша: показываем сразу, пока база ещё отвечает. Пустой кэш ничего не говорит, его пропускаем.
+  function useCache() {
+    var cached = Y.cache.get('reviews');
+    if (!cached || !cached.length) return;
+    reviews = cached.map(function (r) { return Object.assign({}, r, { mine: false }); });
+    ready = true;
+  }
+
+  // Если база молчит дольше обычного (плохая связь), говорим об этом, а не крутим «Загружаем…» молча.
+  function watchSlow() {
+    slowTimer = setTimeout(function () {
+      if (ready || failed) return;
+      slowShown = true;
+      setStatus(statusEl, '', I.t('load.slow'));
+    }, 10000);
+  }
+
+  function gotReviews() {
+    if (slowTimer) { clearTimeout(slowTimer); slowTimer = null; }
+    if (slowShown) { slowShown = false; setStatus(statusEl, '', ''); }
   }
 
   // ---------- форма ----------
@@ -296,7 +338,11 @@
 
   function loadFail(err) {
     console.error(err);
+    failed = true;
+    slowShown = false;
     setStatus(statusEl, 'error', Y.explain(err, 'reviews.loadError'));
+    if (api) sendBtn.disabled = false;      // чтение не вышло, но запись может сработать
+    renderAll();
   }
 
   // Подписка на отзывы; после смены аккаунта («Войти по ID») подписываемся заново: «мой» отзыв зависит от аккаунта.
@@ -304,11 +350,19 @@
     if (watchedFor === state.playerId) return;
     if (stopWatching) stopWatching();
     watchedFor = state.playerId;
-    stopWatching = api.watchReviews(function (list) { reviews = list; renderAll(); syncForm(); }, loadFail);
+    stopWatching = api.watchReviews(function (list) {
+      reviews = list; ready = true; failed = false;
+      // В кэш уходят отзывы без пометки «мой»: она принадлежит человеку, а не отзыву.
+      Y.cache.set('reviews', list.map(function (r) { return Object.assign({}, r, { mine: false }); }));
+      gotReviews();
+      sendBtn.disabled = false;             // теперь известно, есть ли у человека свой отзыв
+      renderAll(); syncForm();
+    }, loadFail);
   }
 
   function start() {
     buildPicker();
+    useCache();
     renderAll();
     if (!Y.firebaseConfigured()) {
       sendBtn.disabled = true;
@@ -316,6 +370,8 @@
       return;
     }
 
+    sendBtn.disabled = true;                // отправка включится, когда придут отзывы из базы (см. watch)
+    watchSlow();
     Y.backend()
       .then(function (b) {
         return b.init(Y.currentPrefs()).then(function (state) {
@@ -338,6 +394,9 @@
     else renderList();
   });
 
-  document.addEventListener('yablonya:lang', function () { renderAll(); syncForm(); });
+  document.addEventListener('yablonya:lang', function () {
+    renderAll(); syncForm();
+    if (slowShown) setStatus(statusEl, '', I.t('load.slow'));     // язык мог смениться
+  });
   start();
 })();
