@@ -133,7 +133,7 @@ body.page-menu .brand { color: #fff; }
 }
 body.page-menu .btn--plus { color: #fff; }
 .btn--plus:hover { border-color: var(--orange); color: var(--orange); }
-.btn--plus[hidden] { display: none; }
+.btn[hidden], .btn--plus[hidden] { display: none; }
 
 /* ---------- внутренние страницы ---------- */
 .page { max-width: 1040px; margin: 0 auto; padding: .5rem clamp(1rem, 4vw, 2rem) 4rem; }
@@ -358,6 +358,20 @@ html[lang="ru"] .lang-note { display: none; }
 
 @media (max-width: 640px) {
   .rv-summary { grid-template-columns: 1fr; }
+}
+
+/* отзывы об игре внутри окна игры (js/game-reviews.js): те же детали, что на странице «Отзывы», но компактнее */
+.gr { margin-top: 1.75rem; padding-top: 1.25rem; border-top: 1px solid var(--border); }
+.gr__title { margin: 0 0 .5rem; font-size: 1.3rem; }
+.gr__form-title, .gr__list-title { margin: 0; font-size: 1.05rem; }
+.gr__form-title { margin-bottom: .5rem; }
+.gr .rv-summary { grid-template-columns: minmax(130px, 180px) 1fr; margin: .75rem 0 1rem; background: var(--surface-2); box-shadow: none; }
+.gr__form { margin-bottom: 1.25rem; padding: 1rem 1.1rem; background: var(--surface-2); border: 1px solid var(--border); border-radius: 16px; }
+.gr .star-picker__star { font-size: 2.1rem; }
+.gr .reviews { gap: .75rem; }
+.gr .review { background: var(--surface-2); box-shadow: none; }
+@media (max-width: 640px) {
+  .gr .rv-summary { grid-template-columns: 1fr; }
 }
 
 /* ---------- команда ---------- */

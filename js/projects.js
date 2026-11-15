@@ -6,7 +6,8 @@
  * при выходе новой версии правится только он. Ключ игры там совпадает с её id отсюда.
  *
  * Новая игра: добавьте здесь блок с новым id, положите иконку и скриншоты в img/games/<id>/,
- * а ссылки впишите в js/links.js.
+ * а ссылки впишите в js/links.js. Блок отзывов в окне игры (js/game-reviews.js) появится сам, привязанный к этому id:
+ * id — латиница, цифры и дефис (до 40 символов), и менять его потом нельзя, под ним лежат отзывы.
  */
 var GAMES = [
   {
@@ -109,6 +110,7 @@ var GAMES = [
   var dDesc = document.getElementById('game-desc');
   var dDownloads = document.getElementById('game-downloads');
   var dHints = document.getElementById('game-hints');
+  var dReviews = document.getElementById('game-reviews');
 
   var openGame = null;
 
@@ -221,11 +223,16 @@ var GAMES = [
   function show(game) {
     openGame = game;
     renderModal(game);
+    // Отзывы об игре (js/game-reviews.js): подписка на них идёт, пока окно открыто.
+    if (Y.GameReviews) Y.GameReviews.open(game.id, dReviews);
     dialog.showModal();
     dialog.scrollTop = 0;
   }
 
-  dialog.addEventListener('close', function () { openGame = null; });
+  dialog.addEventListener('close', function () {
+    openGame = null;
+    if (Y.GameReviews) Y.GameReviews.close();
+  });
 
   document.addEventListener('yablonya:lang', function () {
     renderCards();

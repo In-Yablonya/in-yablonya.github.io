@@ -14,6 +14,7 @@
   <header class="topbar">
     <a class="btn" href="index.html">← <span data-i18n="btn.back">В главное меню</span></a>
     <div class="topbar__actions">
+      <button class="btn btn--grow" type="button" id="account-btn" data-i18n="btn.account">Аккаунт</button>
       <button class="btn btn--icon" type="button" data-lang-toggle>EN</button>
       <button class="btn btn--icon" type="button" data-theme-toggle>☾</button>
     </div>
@@ -40,6 +41,8 @@
       <p id="game-desc" class="muted" style="margin-top:1rem"></p>
       <div class="downloads" id="game-downloads"></div>
       <div id="game-hints"></div>
+      <!-- Отзывы об этой игре: js/game-reviews.js -->
+      <div id="game-reviews"></div>
     </div>
   </dialog>
 
@@ -48,6 +51,8 @@
   <script src="js/fx.js"></script>
   <script src="js/firebase-config.js"></script>
   <script src="js/links.js"></script>
+  <script src="js/account.js"></script>
+  <script src="js/game-reviews.js"></script>
   <script src="js/projects.js"></script>
 </body>
 </html>

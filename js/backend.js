@@ -1,7 +1,7 @@
 /*
  * Связь с Firebase: анонимный вход, ID игрока, никнейм, чат с поддержкой, права администратора.
  * Это ES-модуль: он загружается, когда игрок открывает «Аккаунт» или «Обратиться в поддержку», открывает «Новости»,
- * «Отзывы» или «Империю Мха», а также в простое после загрузки любой страницы (предзагрузка, см. prefetch в конце файла).
+ * «Отзывы» или «Империю Мха», открывает окно игры в «Проектах» (отзывы об игре), а также в простое после загрузки любой страницы (предзагрузка, см. prefetch в конце файла).
  *
  * Как устроен ID:
  *  - Firebase при первом заходе выдаёт анонимному игроку длинный случайный uid. Он и есть ID игрока.
@@ -751,13 +751,21 @@ export function watchReviews(onChange, onError) {
   return () => { stopped = true; if (unsubscribe) unsubscribe(); };
 }
 
+// Проверяет и подчищает то, что человек прислал: оценка (целое 1–5), текст (до REVIEW_TEXT_MAX), имя (до 40 символов).
+function cleanReview(rating, text, name) {
+  const stars = Number(rating);
+  if (!Number.isInteger(stars) || stars < 1 || stars > 5) throw new Error('bad-rating');
+  return {
+    stars,
+    clean: String(text || '').trim().slice(0, REVIEW_TEXT_MAX),
+    author: String(name || '').trim().slice(0, 40) || 'User'
+  };
+}
+
 // Оставляет отзыв или меняет свой. Возвращает 'created' | 'updated'.
 export async function saveReview(rating, text, name) {
   await requireStarted();
-  const stars = Number(rating);
-  if (!Number.isInteger(stars) || stars < 1 || stars > 5) throw new Error('bad-rating');
-  const clean = String(text || '').trim().slice(0, REVIEW_TEXT_MAX);
-  const author = String(name || '').trim().slice(0, 40) || 'User';
+  const { stars, clean, author } = cleanReview(rating, text, name);
   const key = await reviewKey();
 
   if ((await get(ref(db, `reviews/${key}`))).exists()) {
@@ -776,6 +784,77 @@ export async function deleteMyReview() {
   await requireStarted();
   const key = await reviewKey();
   await update(ref(db), { [`reviews/${key}`]: null, [`reviewOwner/${key}`]: null });
+}
+
+// ---------- отзывы об играх ----------
+// gameReviews/<игра>/<ключ>      — отзыв об игре из окна игры («Проекты»): те же поля, что у обычного отзыва. Читают все.
+// gameReviewOwner/<игра>/<ключ>  — ID автора (закрытая запись), как reviewOwner у «Отзывов».
+// <игра> — id игры из js/projects.js (латиница, цифры и дефис). Ключ — хэш ID игрока вместе с игрой, поэтому у человека
+// один отзыв на каждую игру, а по ключу нельзя понять, что это один и тот же человек в разных играх.
+
+const GAME_ID_PATTERN = /^[a-z0-9-]{1,40}$/;
+
+function checkGameId(gameId) {
+  if (!GAME_ID_PATTERN.test(String(gameId))) throw new Error('bad-game');
+}
+
+async function gameReviewKey(gameId) {
+  const bytes = new TextEncoder().encode(`yablonya-gamereview:${gameId}:${playerId}`);
+  const hash = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 32);
+}
+
+// Отзывы об одной игре (обновляются сами). Возвращает функцию «отписаться».
+export function watchGameReviews(gameId, onChange, onError) {
+  let unsubscribe = null;
+  let stopped = false;
+  Promise.resolve().then(() => {
+    checkGameId(gameId);
+    return gameReviewKey(gameId);
+  }).then((mine) => {
+    if (stopped) return;
+    unsubscribe = onValue(
+      ref(db, `gameReviews/${gameId}`),
+      (snap) => onChange(reviewsFrom(snap.val(), mine)),
+      (err) => { if (onError) onError(err); }
+    );
+  }).catch((err) => { if (onError) onError(err); });
+  return () => { stopped = true; if (unsubscribe) unsubscribe(); };
+}
+
+// Оставляет отзыв об игре или меняет свой. Возвращает 'created' | 'updated'.
+export async function saveGameReview(gameId, rating, text, name) {
+  await requireStarted();
+  checkGameId(gameId);
+  const { stars, clean, author } = cleanReview(rating, text, name);
+  const key = await gameReviewKey(gameId);
+  const path = `gameReviews/${gameId}/${key}`;
+
+  if ((await get(ref(db, path))).exists()) {
+    await update(ref(db, path), { rating: stars, text: clean || null, name: author, updatedAt: serverTimestamp() });
+    return 'updated';
+  }
+  const review = { rating: stars, name: author, createdAt: serverTimestamp() };
+  if (clean) review.text = clean;
+  // Владельца записываем в том же запросе, что и сам отзыв: правила проверяют их вместе.
+  await update(ref(db), { [`gameReviewOwner/${gameId}/${key}`]: playerId, [path]: review });
+  return 'created';
+}
+
+// Удаляет свой отзыв об игре.
+export async function deleteMyGameReview(gameId) {
+  await requireStarted();
+  checkGameId(gameId);
+  const key = await gameReviewKey(gameId);
+  await update(ref(db), { [`gameReviews/${gameId}/${key}`]: null, [`gameReviewOwner/${gameId}/${key}`]: null });
+}
+
+// Только администраторы: убрать чужой отзыв об игре.
+export async function deleteGameReview(gameId, key) {
+  await requireStarted();
+  if (!support) throw new Error('not-admin');
+  checkGameId(gameId);
+  await remove(ref(db, `gameReviews/${gameId}/${key}`));
 }
 
 // ---------- предзагрузка ----------
