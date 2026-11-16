@@ -40,7 +40,20 @@
         <p class="status" id="nick-status" role="status" aria-live="polite"></p>
       </form>
 
-      <div class="panel-block">
+      <section class="panel-block rating" id="rating-block" aria-labelledby="rating-title">
+        <h3 id="rating-title" data-i18n="rating.title">Мой рейтинг</h3>
+        <div class="rating__top">
+          <div class="rating__level" id="rating-level"></div>
+          <div class="rating__score" id="rating-score"></div>
+        </div>
+        <div class="rating__bar" id="rating-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" data-i18n-attr="aria-label:rating.title"><span class="rating__fill" id="rating-fill"></span></div>
+        <p class="muted small" id="rating-next"></p>
+        <dl class="rating__stats" id="rating-stats"></dl>
+        <p class="muted small" id="rating-how"></p>
+        <p class="muted small" id="rating-guest" hidden data-i18n="rating.guest"></p>
+      </section>
+
+      <div class="panel-block" id="id-block">
       <h3 data-i18n="account.id">Ваш ID</h3>
       <div class="id-box">
         <code id="account-id">••••••••••••••••</code>
@@ -129,14 +142,71 @@
   var pwRepeat = $('#pw-repeat');
   var pwSave = $('#pw-save');
   var pwStatus = $('#pw-status');
+  var idBlock = $('#id-block');
+  var ratingLevel = $('#rating-level');
+  var ratingScore = $('#rating-score');
+  var ratingBar = $('#rating-bar');
+  var ratingFill = $('#rating-fill');
+  var ratingNext = $('#rating-next');
+  var ratingStats = $('#rating-stats');
+  var ratingHow = $('#rating-how');
+  var ratingGuest = $('#rating-guest');
 
   var PASSWORD_MIN = 8;
 
   var currentId = '';
   var currentProfile = { number: null, nickname: null };
   var currentSupport = false;
+  var currentRegistered = false;
+  var currentStats = null;                       // сохранённые в базе счётчики (null: аккаунта ещё нет)
   var currentPassword = { set: false, mine: false };
   var idShown = false;
+
+  // ---------- рейтинг пользователя (js/stats.js) ----------
+  function ratingRow(label, value) {
+    return Y.h('div', { class: 'rating__row' }, Y.h('dt', { text: label }), Y.h('dd', { text: String(value) }));
+  }
+
+  function renderRating() {
+    var S = Y.stats;
+    if (!S) return;
+    var t = S.total(currentStats);
+    var points = S.score(t, currentSupport);
+    var lv = S.level(points);
+
+    ratingLevel.textContent = I.t('rating.level.' + lv.key);
+    ratingScore.textContent = I.t('rating.score', { n: points });
+    var pct = Math.round(lv.progress * 100);
+    ratingFill.style.width = pct + '%';
+    ratingBar.setAttribute('aria-valuenow', String(pct));
+    ratingNext.textContent = lv.next
+      ? I.t('rating.next', { n: lv.next.at - points, level: I.t('rating.level.' + lv.next.key) })
+      : I.t('rating.max');
+
+    ratingStats.textContent = '';
+    ratingStats.append(
+      ratingRow(I.t('rating.stat.games'), t.games),
+      ratingRow(I.t('rating.stat.downloads'), t.downloads),
+      ratingRow(I.t('rating.stat.days'), t.days),
+      ratingRow(I.t('rating.stat.time'), S.duration(t.seconds))
+    );
+    if (currentSupport) {
+      ratingStats.append(
+        ratingRow(I.t('rating.stat.news'), t.newsPosts),
+        ratingRow(I.t('rating.stat.moss'), t.mossPosts),
+        ratingRow(I.t('rating.stat.replies'), t.supportReplies)
+      );
+    }
+    ratingHow.textContent = I.t('rating.how') + (currentSupport ? ' ' + I.t('rating.how.admin') : '');
+    ratingGuest.hidden = currentRegistered;
+  }
+
+  // Счётчики из базы (если аккаунт есть) и пересчёт рейтинга.
+  function loadStats(b) {
+    return b.getStats()
+      .then(function (s) { currentStats = s; renderRating(); })
+      .catch(function (err) { console.warn('Рейтинг: счётчики не загрузились:', err && (err.code || err.message)); });
+  }
 
   function renderId() {
     idEl.textContent = idShown ? currentId : '••••••••••••••••••••••••';
@@ -174,13 +244,29 @@
     currentId = state.playerId;
     currentProfile = state.profile;
     currentSupport = !!state.support;
+    currentRegistered = !!state.registered;
+    if (!currentRegistered) currentStats = null;
     currentPassword = state.password || { set: false, mine: false };
     notice.hidden = !state.signedOut;
+    idBlock.hidden = !currentRegistered;           // ID появляется вместе с аккаунтом
     renderNick();
     renderId();
     renderStaff();
     renderPassword();
+    renderRating();
     document.dispatchEvent(new CustomEvent('yablonya:state', { detail: state }));
+  }
+
+  // Состояние изменилось само (например, никнейм создал аккаунт): обновляем окно.
+  function refreshAccount() {
+    return Y.backend()
+      .then(function (b) {
+        return b.init(Y.currentPrefs()).then(function (state) {
+          applyState(state);
+          return loadStats(b);
+        });
+      })
+      .catch(function (err) { console.warn('Аккаунт не обновился:', err && (err.code || err.message)); });
   }
 
   function loadAccount() {
@@ -198,9 +284,11 @@
           idShown = false;
           setStatus(nickStatus, '', '');
           setStatus(pwStatus, '', '');
+          currentStats = null;
           applyState(state);
           setStatus(accountStatus, '', '');
           accountBody.hidden = false;
+          return loadStats(b);
         });
       })
       .catch(function (err) {
@@ -266,6 +354,7 @@
         currentProfile.nickname = nickname;
         renderNick();
         setStatus(nickStatus, 'ok', I.t(nickname ? 'nick.saved' : 'nick.reset'));
+        if (!currentRegistered) return refreshAccount();      // никнейм создал аккаунт: показываем ID, номер и счётчики
       })
       .catch(function (err) {
         console.error(err);
@@ -314,5 +403,12 @@
     renderNickPlaceholder();
     renderId();
     renderPassword();
+    renderRating();
+  });
+
+  // Пока окно открыто, рейтинг «живой»: время на сайте идёт, а после отправки счётчиков в базу берём их заново.
+  setInterval(function () { if (accountDialog.open && !accountBody.hidden) renderRating(); }, 5000);
+  document.addEventListener('yablonya:stats', function () {
+    if (accountDialog.open && !accountBody.hidden) refreshAccount();
   });
 })();

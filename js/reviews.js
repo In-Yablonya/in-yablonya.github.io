@@ -301,8 +301,8 @@
 
     sendBtn.disabled = true;
     setStatus(formStatus, '', I.t('support.loading'));
-    // Имя берём заново: человек мог сменить никнейм в «Аккаунте» уже на этой странице.
-    api.init(Y.currentPrefs())
+    // Первый отзыв создаёт аккаунт, а имя берём заново: человек мог сменить никнейм в «Аккаунте» уже на этой странице.
+    api.register()
       .then(function (state) { return api.saveReview(rating, textEl.value, Y.displayName(state.profile)); })
       .then(function (result) {
         formTouched = false;

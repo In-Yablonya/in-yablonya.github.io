@@ -64,6 +64,39 @@
           ".write": "auth != null && !data.exists() && newData.val() === false && root.child('links').child($pid).child(auth.uid).exists()",
           ".validate": "newData.isBoolean()"
         },
+        "stats": {
+          "days": {
+            ".write": "auth != null && root.child('links').child($pid).child(auth.uid).exists()",
+            ".validate": "newData.isNumber() && newData.val() % 1 === 0 && newData.val() >= (data.exists() ? data.val() : 0) && newData.val() - (data.exists() ? data.val() : 0) <= 366 && newData.val() <= 1000000"
+          },
+          "seconds": {
+            ".write": "auth != null && root.child('links').child($pid).child(auth.uid).exists()",
+            ".validate": "newData.isNumber() && newData.val() % 1 === 0 && newData.val() >= (data.exists() ? data.val() : 0) && newData.val() - (data.exists() ? data.val() : 0) <= 86400 && newData.val() <= 1000000000"
+          },
+          "downloads": {
+            ".write": "auth != null && root.child('links').child($pid).child(auth.uid).exists()",
+            ".validate": "newData.isNumber() && newData.val() % 1 === 0 && newData.val() >= (data.exists() ? data.val() : 0) && newData.val() - (data.exists() ? data.val() : 0) <= 100 && newData.val() <= 1000000"
+          },
+          "games": {
+            "$game": {
+              ".write": "auth != null && root.child('links').child($pid).child(auth.uid).exists()",
+              ".validate": "$game.matches(/^[a-z0-9-]{1,40}$/) && newData.val() === true"
+            }
+          },
+          "newsPosts": {
+            ".write": "auth != null && root.child('links').child($pid).child(auth.uid).exists() && root.child('supportSessions').child(auth.uid).val() === $pid && root.child('players').child($pid).child('admin').val() === true",
+            ".validate": "newData.isNumber() && newData.val() % 1 === 0 && newData.val() >= (data.exists() ? data.val() : 0) && newData.val() - (data.exists() ? data.val() : 0) <= 1 && newData.val() <= 1000000"
+          },
+          "mossPosts": {
+            ".write": "auth != null && root.child('links').child($pid).child(auth.uid).exists() && root.child('supportSessions').child(auth.uid).val() === $pid && root.child('players').child($pid).child('admin').val() === true",
+            ".validate": "newData.isNumber() && newData.val() % 1 === 0 && newData.val() >= (data.exists() ? data.val() : 0) && newData.val() - (data.exists() ? data.val() : 0) <= 1 && newData.val() <= 1000000"
+          },
+          "supportReplies": {
+            ".write": "auth != null && root.child('links').child($pid).child(auth.uid).exists() && root.child('supportSessions').child(auth.uid).val() === $pid && root.child('players').child($pid).child('admin').val() === true",
+            ".validate": "newData.isNumber() && newData.val() % 1 === 0 && newData.val() >= (data.exists() ? data.val() : 0) && newData.val() - (data.exists() ? data.val() : 0) <= 1 && newData.val() <= 1000000"
+          },
+          "$other": { ".validate": false }
+        },
         "$other": { ".validate": false }
       }
     },

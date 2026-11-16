@@ -29,7 +29,7 @@ import {
   EmailAuthProvider, reauthenticateWithCredential, updatePassword
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
 import {
-  getDatabase, ref, get, set, update, remove, push, onValue, runTransaction, serverTimestamp
+  getDatabase, ref, get, set, update, remove, push, onValue, runTransaction, serverTimestamp, increment
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js';
 
 const COOKIE_NAME = 'yablonya_id';
@@ -46,6 +46,8 @@ let passwordInfo = { set: false, mine: false };   // задан ли парол�
 let signedOut = false;  // true, если вход этого браузера отозван (на аккаунте задан пароль)
 let lastPrefs = { lang: 'ru', theme: 'system' };
 let initPromise = null;
+let registered = false; // true, если у игрока уже есть запись players/<ID> (см. register)
+let registering = null;
 
 export const NICKNAME_MAX = 24;
 export const PASSWORD_MIN = 8;
@@ -128,58 +130,122 @@ async function loadPasswordInfo() {
 }
 
 // ---------- запуск ----------
+// Новый посетитель, который пока только смотрит сайт, в базе не появляется совсем: ни входа Firebase, ни записей.
+// Аккаунт (ID, номер «Пользователь N», links/<ID>, players/<ID>) создаётся, когда человек делает что-то настоящее:
+// скачивает игру, меняет никнейм, задаёт пароль, оставляет отзыв или комментарий, пишет в поддержку (см. register).
+// Так «пустых» записей у тех, кто зашёл и ушёл, не бывает.
+function resetGuest() {
+  uid = null;
+  playerId = null;
+  profile = { number: null, nickname: null, admin: false };
+  support = null;
+  passwordInfo = { set: false, mine: false };
+  registered = false;
+}
+
 async function start(prefs) {
   const app = initializeApp(window.firebaseConfig);
   auth = getAuth(app);
   db = getDatabase(app);
 
   await auth.authStateReady();
+  const stored = storedId();
+  signedOut = false;
+  resetGuest();
+  if (!auth.currentUser && !stored) return;      // новый посетитель: ничего не создаём
+
   if (!auth.currentUser) await signInAnonymously(auth);
   uid = auth.currentUser.uid;
-  signedOut = false;
 
   const saved = await savedPid();
-  playerId = storedId() || saved || uid;
+  playerId = stored || saved || uid;
 
-  // Привязываем текущий вход в Firebase к ID игрока (нужно, если ID взят из cookie, а uid новый).
+  // Есть ли у этого входа аккаунт? Привязка links/<ID>/<uid> — это и есть «вход принадлежит аккаунту».
+  // Если ID взят из cookie (или из uidPid), а вход новый, привязываем его (так аккаунт находится после очистки данных браузера).
+  // Для нового игрока (ID совпадает с uid) привязку не создаём: аккаунта у него ещё нет.
   const linkRef = ref(db, `links/${playerId}/${uid}`);
+  let linked = false;
   try {
-    if (!(await get(linkRef)).exists()) await set(linkRef, true);
+    linked = (await get(linkRef)).exists();
+    if (!linked && playerId !== uid) { await set(linkRef, true); linked = true; }
   } catch (err) {
     if (!isDenied(err) || playerId === uid) throw err;
     // На этом аккаунте задан пароль, а вход этого браузера уже не привязан к нему (его отозвали).
-    // Продолжаем как новый игрок; войти в прежний аккаунт можно по ID и паролю в окне «Аккаунт».
+    // Продолжаем как новый посетитель; войти в прежний аккаунт можно по ID и паролю в окне «Аккаунт».
     signedOut = true;
     try { await remove(ref(db, `uidPid/${uid}`)); } catch (e) { /* не критично */ }
     forgetId();
     playerId = uid;
-    await set(ref(db, `links/${playerId}/${uid}`), true);
-  }
-  if (saved !== playerId) await rememberPid(playerId);
-  await loadPasswordInfo();
-
-  const playerRef = ref(db, `players/${playerId}`);
-  const snap = await get(playerRef);
-  if (snap.exists()) {
-    profile = profileFrom(snap.val());
-    const saved = snap.val() || {};
-    if (saved.lang !== prefs.lang || saved.theme !== prefs.theme) {
-      await update(playerRef, { lang: prefs.lang, theme: prefs.theme });
-    }
-    if (profile.number == null) {                 // профиль без номера: выдаём его сейчас
-      profile.number = await nextNumber();
-      await update(playerRef, { number: profile.number });
-    }
-  } else {
-    // Новый игрок: порядковый номер для имени «Пользователь N».
-    const number = await nextNumber();
-    // admin: false создаётся сразу, чтобы поле было видно в консоли Firebase: включить его (true) может только владелец.
-    await update(playerRef, { createdAt: serverTimestamp(), lang: prefs.lang, theme: prefs.theme, number, admin: false });
-    profile = { number, nickname: null, admin: false };
+    linked = false;
   }
 
+  if (linked) {
+    if (saved !== playerId) await rememberPid(playerId);
+    await loadPasswordInfo();
+
+    const playerRef = ref(db, `players/${playerId}`);
+    const snap = await get(playerRef);
+    if (snap.exists()) {
+      profile = profileFrom(snap.val());
+      const savedPrefs = snap.val() || {};
+      if (savedPrefs.lang !== prefs.lang || savedPrefs.theme !== prefs.theme) {
+        await update(playerRef, { lang: prefs.lang, theme: prefs.theme });
+      }
+      if (profile.number == null) {                 // профиль без номера: выдаём его сейчас
+        profile.number = await nextNumber();
+        await update(playerRef, { number: profile.number });
+      }
+      registered = true;
+      rememberId(playerId);
+      await syncSupport();
+      return;
+    }
+    // ID есть, а записи игрока нет (её удалили вручную): это снова новый посетитель.
+    if (playerId !== uid) {
+      try { await remove(linkRef); } catch (e) { /* не критично */ }
+      try { await remove(ref(db, `uidPid/${uid}`)); } catch (e) { /* не критично */ }
+      forgetId();
+      playerId = uid;
+    }
+    passwordInfo = { set: false, mine: false };
+  }
+  // Аккаунта нет: вход Firebase может быть (человек уже ставил реакцию), записей — нет.
+}
+
+// Вход Firebase нужен, чтобы что-то записать. У нового посетителя его до первого действия нет.
+async function ensureAuth() {
+  await requireStarted();
+  if (!auth.currentUser) await signInAnonymously(auth);
+  uid = auth.currentUser.uid;
+  if (!playerId) playerId = uid;
+}
+
+// Создаёт аккаунт: привязка входа к ID, номер «Пользователь N» и запись players/<ID>. Повторные вызовы ничего не делают.
+// Возвращает состояние (как init), чтобы вызывающий мог сразу взять имя для подписи.
+export async function register() {
+  await requireStarted();
+  if (!registered) {
+    if (!registering) registering = doRegister().then(() => { registering = null; }, (err) => { registering = null; throw err; });
+    await registering;
+  }
+  return snapshotState();
+}
+
+async function doRegister() {
+  await ensureAuth();
+  await set(ref(db, `links/${playerId}/${uid}`), true);
+  // Номер для имени «Пользователь N».
+  const number = await nextNumber();
+  // admin: false создаётся сразу, чтобы поле было видно в консоли Firebase: включить его (true) может только владелец.
+  await update(ref(db, `players/${playerId}`), {
+    createdAt: serverTimestamp(), lang: lastPrefs.lang, theme: lastPrefs.theme, number, admin: false
+  });
+  profile = { number, nickname: null, admin: false };
+  registered = true;
   rememberId(playerId);
+  await loadPasswordInfo();
   await syncSupport();
+  document.dispatchEvent(new CustomEvent('yablonya:registered'));
 }
 
 function profileFrom(value) {
@@ -217,7 +283,8 @@ async function syncSupport() {
 
 function snapshotState() {
   return {
-    playerId,
+    playerId: playerId || '',                      // у нового посетителя ID ещё нет (пустая строка)
+    registered,                                    // есть ли у него аккаунт (запись в базе)
     profile: { number: profile.number, nickname: profile.nickname, admin: profile.admin },
     support: support ? { admin: true } : null,
     password: { set: passwordInfo.set, mine: passwordInfo.mine },
@@ -247,13 +314,15 @@ export function init(prefs) {
 export async function savePrefs(prefs) {
   if (!initPromise) return;
   await initPromise;
+  lastPrefs = { ...lastPrefs, ...prefs };
+  if (!registered) return;                         // записи ещё нет: язык и тему запомнит register
   await update(ref(db, `players/${playerId}`), { lang: prefs.lang, theme: prefs.theme });
 }
 
 // Входит в аккаунт по ID (и паролю, если он задан). Возвращает
 // 'player' | 'same' | 'invalid' | 'notfound' | 'need-password' | 'wrong' | 'toomany'.
 export async function useId(input, password) {
-  await requireStarted();
+  await ensureAuth();                              // привязать вход к чужому ID можно только из-под входа Firebase
   const id = String(input || '').trim();
   if (!ID_PATTERN.test(id)) return 'invalid';
   if (id === playerId) return 'same';
@@ -272,11 +341,13 @@ export async function useId(input, password) {
   if (found.exists()) {
     playerId = id;
     profile = profileFrom(found.val());
+    registered = true;
     rememberId(id);
     signedOut = false;
     passwordInfo = { set: false, mine: false };
     await rememberPid(id);
     await syncSupport();                         // у этого аккаунта могут быть права администратора
+    document.dispatchEvent(new CustomEvent('yablonya:registered'));
     return 'player';
   }
   await remove(ref(db, `links/${id}/${uid}`));
@@ -316,18 +387,20 @@ async function signInWithPassword(id, pw) {
   const found = await retryDenied(() => get(ref(db, `players/${id}`)));
   playerId = id;
   profile = profileFrom(found.val());
+  registered = true;
   rememberId(id);
   signedOut = false;
   await rememberPid(id);
   await loadPasswordInfo();
   await syncSupport();                           // у этого аккаунта могут быть права администратора
+  document.dispatchEvent(new CustomEvent('yablonya:registered'));
   return 'player';
 }
 
 // Задаёт пароль аккаунту. Возвращает 'ok' | 'short' | 'long' | 'exists' | 'taken' | 'weak'.
 // Дальше войти в аккаунт можно только по ID и паролю, а остальные привязанные входы отзываются.
 export async function setPassword(password) {
-  await requireStarted();
+  await register();                              // пароль защищает аккаунт, поэтому аккаунт должен существовать
   const pw = String(password || '');
   if (pw.length < PASSWORD_MIN) return 'short';
   if (pw.length > PASSWORD_MAX) return 'long';
@@ -394,9 +467,10 @@ export async function changePassword(current, next) {
 // Меняет никнейм. Пустая строка возвращает имя по умолчанию («Пользователь N»).
 // Возвращает сохранённый никнейм или null.
 export async function setNickname(name) {
-  await requireStarted();
   const nickname = String(name || '').trim();
   if (nickname.length > NICKNAME_MAX) throw new Error('nickname-too-long');
+  if (!nickname && !registered) { await requireStarted(); return null; }   // сбрасывать у посетителя без аккаунта нечего
+  await register();                              // свой никнейм — это уже аккаунт
   const playerRef = ref(db, `players/${playerId}`);
   if (nickname) {
     await update(playerRef, { nickname });
@@ -406,6 +480,63 @@ export async function setNickname(name) {
     profile.nickname = null;
   }
   return profile.nickname;
+}
+
+// ---------- рейтинг пользователя («Аккаунт») ----------
+// players/<ID>/stats: days (дней с визитами), seconds (время на сайте), downloads (скачано файлов),
+// games/<id игры>: true (какие игры скачаны) и, только у администраторов, newsPosts, mossPosts, supportReplies.
+// Счётчики копятся на устройстве (js/stats.js), а сюда попадают пачками. Читает их только сам игрок.
+
+function statsFrom(value) {
+  const v = value || {};
+  const n = (x) => (Number.isFinite(Number(x)) ? Number(x) : 0);
+  return {
+    days: n(v.days),
+    seconds: n(v.seconds),
+    downloads: n(v.downloads),
+    games: Object.keys(v.games || {}).filter((g) => GAME_ID_PATTERN.test(g)),
+    newsPosts: n(v.newsPosts),
+    mossPosts: n(v.mossPosts),
+    supportReplies: n(v.supportReplies)
+  };
+}
+
+// Сохранённые счётчики или null, если аккаунта ещё нет.
+export async function getStats() {
+  await requireStarted();
+  if (!registered) return null;
+  return statsFrom((await get(ref(db, `players/${playerId}/stats`))).val());
+}
+
+// Добавляет к сохранённым счётчикам то, что накопилось на устройстве: { days, seconds, downloads, games: [id игры, …] }.
+// Возвращает true, если записано; false, если аккаунта ещё нет (счётчики остаются на устройстве).
+export async function addStats(delta) {
+  await requireStarted();
+  if (!registered) return false;
+  const d = delta || {};
+  const whole = (x, max) => Math.max(0, Math.min(max, Math.floor(Number(x) || 0)));
+  const base = `players/${playerId}/stats`;
+  const updates = {};
+  const days = whole(d.days, 366);
+  const seconds = whole(d.seconds, 86400);
+  const downloads = whole(d.downloads, 100);
+  if (days) updates[`${base}/days`] = increment(days);
+  if (seconds) updates[`${base}/seconds`] = increment(seconds);
+  if (downloads) updates[`${base}/downloads`] = increment(downloads);
+  (Array.isArray(d.games) ? d.games : []).filter((g) => GAME_ID_PATTERN.test(String(g))).slice(0, 50)
+    .forEach((g) => { updates[`${base}/games/${g}`] = true; });
+  if (Object.keys(updates).length) await update(ref(db), updates);
+  return true;
+}
+
+// Дополнительные счётчики администраторов: опубликованные новости и посты, ответы в поддержке.
+// Главное действие уже сделано, поэтому сбой счётчика его не ломает.
+async function bumpAdminStat(name) {
+  try {
+    if (support && registered) await update(ref(db), { [`players/${playerId}/stats/${name}`]: increment(1) });
+  } catch (err) {
+    console.warn('Счётчик не обновился:', name, err && err.code);
+  }
 }
 
 // ---------- чат с поддержкой ----------
@@ -448,17 +579,35 @@ async function postMessage(pid, role, name, text, nick) {
 
 // Игрок пишет в свой чат. name — его имя (никнейм или «Пользователь N»).
 export async function sendMessage(text, name) {
-  await requireStarted();
+  await register();                              // первое сообщение в поддержку создаёт аккаунт
   await postMessage(playerId, 'user', name, text, name);
 }
 
 // Сообщения чата текущего игрока (обновляются сами). Возвращает функцию «отписаться».
+// Пока у посетителя нет аккаунта, переписки нет; подписка начнётся, как только он появится (первое сообщение).
 export function watchMyChat(onChange, onError) {
-  return onValue(
-    ref(db, `chats/${playerId}`),
-    (snap) => onChange(messagesFrom(snap.val())),
-    (err) => { if (onError) onError(err); }
-  );
+  let unsubscribe = null;
+  let stopped = false;
+  const subscribe = () => {
+    if (stopped || unsubscribe) return;
+    unsubscribe = onValue(
+      ref(db, `chats/${playerId}`),
+      (snap) => onChange(messagesFrom(snap.val())),
+      (err) => { if (onError) onError(err); }
+    );
+  };
+  const onRegistered = () => subscribe();
+  if (registered) {
+    subscribe();
+  } else {
+    document.addEventListener('yablonya:registered', onRegistered);
+    onChange([]);
+  }
+  return () => {
+    stopped = true;
+    document.removeEventListener('yablonya:registered', onRegistered);
+    if (unsubscribe) unsubscribe();
+  };
 }
 
 // Только для администраторов: список чатов, самые свежие сверху.
@@ -494,6 +643,7 @@ export async function sendAdminMessage(pid, text, name, nick) {
   await requireStarted();
   if (!support) throw new Error('not-admin');
   await postMessage(pid, 'admin', name, text, nick);
+  await bumpAdminStat('supportReplies');
 }
 
 // ---------- посты про «Империю Мха» ----------
@@ -540,6 +690,7 @@ export async function createPost(title, text, author) {
     author: String(author || '').trim().slice(0, 40) || 'Admin',
     createdAt: serverTimestamp()
   });
+  await bumpAdminStat('mossPosts');
   return key;
 }
 
@@ -562,7 +713,9 @@ export async function deletePost(id) {
 // newsReactions/<post>/<ключ игрока> — 'like' или 'dislike'. Ключ — хэш ID игрока, а не сам ID:
 //   сам ID работает как пароль и в открытых данных светиться не должен.
 
+// Ключи (voterKey, reviewKey, gameReviewKey) считаются из ID игрока; у нового посетителя ID ещё нет, и «своего» у него нет (null).
 async function voterKey() {
+  if (!playerId) return null;
   const bytes = new TextEncoder().encode(`yablonya-news:${playerId}`);
   const hash = await crypto.subtle.digest('SHA-256', bytes);
   return Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 32);
@@ -622,20 +775,21 @@ function reactionsFrom(value, mine) {
 export function watchNewsReactions(onChange, onError) {
   let unsubscribe = null;
   let stopped = false;
-  voterKey().then((mine) => {
-    if (stopped) return;
-    unsubscribe = onValue(
-      ref(db, 'newsReactions'),
-      (snap) => onChange(reactionsFrom(snap.val(), mine)),
-      (err) => { if (onError) onError(err); }
-    );
-  }).catch((err) => { if (onError) onError(err); });
+  // Ключ «своей» реакции считаем при каждом обновлении: у нового посетителя ID появляется только после первого лайка.
+  unsubscribe = onValue(
+    ref(db, 'newsReactions'),
+    (snap) => {
+      voterKey().then((mine) => { if (!stopped) onChange(reactionsFrom(snap.val(), mine)); })
+        .catch((err) => { if (onError) onError(err); });
+    },
+    (err) => { if (onError) onError(err); }
+  );
   return () => { stopped = true; if (unsubscribe) unsubscribe(); };
 }
 
 // Поставить реакцию. Повторное нажатие на ту же снимает её; value: 'like' | 'dislike'.
 export async function setReaction(postId, value, current) {
-  await requireStarted();
+  await ensureAuth();                            // лайк пишется под входом Firebase; аккаунт для него не нужен
   const key = await voterKey();
   const target = ref(db, `newsReactions/${postId}/${key}`);
   if (current === value) await remove(target);
@@ -644,7 +798,7 @@ export async function setReaction(postId, value, current) {
 
 // Комментарий (или ответ, если указан parent — id главного комментария).
 export async function addComment(postId, text, name, parentId, replyTo) {
-  await requireStarted();
+  await register();                              // подпись комментария — имя аккаунта («Пользователь N» или никнейм)
   const clean = String(text || '').trim();
   if (!clean) throw new Error('empty-comment');
   const key = push(ref(db, `newsComments/${postId}`)).key;
@@ -687,6 +841,7 @@ export async function createNews(title, text, author) {
     author: String(author || '').trim().slice(0, 40) || 'Admin',
     createdAt: serverTimestamp()
   });
+  await bumpAdminStat('newsPosts');
   return key;
 }
 
@@ -716,6 +871,7 @@ export async function deleteNews(id) {
 export const REVIEW_TEXT_MAX = 1000;
 
 async function reviewKey() {
+  if (!playerId) return null;
   const bytes = new TextEncoder().encode(`yablonya-review:${playerId}`);
   const hash = await crypto.subtle.digest('SHA-256', bytes);
   return Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 32);
@@ -764,7 +920,7 @@ function cleanReview(rating, text, name) {
 
 // Оставляет отзыв или меняет свой. Возвращает 'created' | 'updated'.
 export async function saveReview(rating, text, name) {
-  await requireStarted();
+  await register();                              // отзыв привязывается к аккаунту
   const { stars, clean, author } = cleanReview(rating, text, name);
   const key = await reviewKey();
 
@@ -782,6 +938,7 @@ export async function saveReview(rating, text, name) {
 // Удаляет свой отзыв.
 export async function deleteMyReview() {
   await requireStarted();
+  if (!registered) return;                       // аккаунта нет, значит, и своего отзыва нет
   const key = await reviewKey();
   await update(ref(db), { [`reviews/${key}`]: null, [`reviewOwner/${key}`]: null });
 }
@@ -799,6 +956,7 @@ function checkGameId(gameId) {
 }
 
 async function gameReviewKey(gameId) {
+  if (!playerId) return null;
   const bytes = new TextEncoder().encode(`yablonya-gamereview:${gameId}:${playerId}`);
   const hash = await crypto.subtle.digest('SHA-256', bytes);
   return Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 32);
@@ -836,7 +994,7 @@ export function watchGameReviews(gameId, onChange, onError) {
 
 // Оставляет отзыв об игре или меняет свой. Возвращает 'created' | 'updated'.
 export async function saveGameReview(gameId, rating, text, name) {
-  await requireStarted();
+  await register();                              // отзыв привязывается к аккаунту
   checkGameId(gameId);
   const { stars, clean, author } = cleanReview(rating, text, name);
   const key = await gameReviewKey(gameId);
@@ -856,6 +1014,7 @@ export async function saveGameReview(gameId, rating, text, name) {
 // Удаляет свой отзыв об игре.
 export async function deleteMyGameReview(gameId) {
   await requireStarted();
+  if (!registered) return;                       // аккаунта нет, значит, и своего отзыва нет
   checkGameId(gameId);
   const key = await gameReviewKey(gameId);
   await update(ref(db), { [`gameReviews/${gameId}/${key}`]: null, [`gameReviewOwner/${gameId}/${key}`]: null });

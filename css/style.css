@@ -233,6 +233,18 @@ details.hint p { margin: .5rem 0 0; color: var(--muted); }
 
 .panel-block { margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px solid var(--border); }
 .panel-block h3 { font-size: 1.1rem; }
+.panel-block[hidden] { display: none; }
+
+/* рейтинг пользователя в окне «Аккаунт» (js/stats.js) */
+.rating__top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: .25rem 1rem; }
+.rating__level { font-size: 1.35rem; font-weight: 800; color: var(--orange); }
+.rating__score { font-weight: 700; }
+.rating__bar { height: .7rem; margin: .6rem 0 .4rem; background: var(--surface-2); border-radius: 999px; overflow: hidden; }
+.rating__fill { display: block; height: 100%; width: 0; background: var(--orange); border-radius: 999px; transition: width .4s ease; }
+.rating__stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: .5rem; margin: .9rem 0; }
+.rating__row { padding: .55rem .8rem; background: var(--surface-2); border-radius: 12px; }
+.rating__row dt { color: var(--muted); font-size: .85rem; }
+.rating__row dd { margin: .1rem 0 0; font-size: 1.15rem; font-weight: 700; }
 
 /* ---------- чат поддержки ---------- */
 dialog.modal--chat { width: min(560px, calc(100vw - 1.5rem)); }

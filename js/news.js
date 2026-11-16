@@ -217,7 +217,12 @@
     var text = n.input.value.trim();
     if (!text || !api) return;
     n.send.disabled = true;
-    api.addComment(n.id, text, myName, n.reply && n.reply.parentId, n.reply && n.reply.name)
+    // Первый комментарий создаёт аккаунт (имя «Пользователь N»), поэтому подпись берём уже после этого.
+    api.register()
+      .then(function (state) {
+        myName = Y.displayName(state.profile);
+        return api.addComment(n.id, text, myName, n.reply && n.reply.parentId, n.reply && n.reply.name);
+      })
       .then(function () { n.input.value = ''; cancelReply(n); setStatus('', ''); })
       .catch(fail)
       .then(function () { n.send.disabled = false; n.input.focus(); });

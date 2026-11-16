@@ -147,7 +147,12 @@
 
     chatSend.disabled = true;
     setStatus(chatStatus, '', '');
-    chatApi.sendMessage(text, chatName)
+    // Первое сообщение создаёт аккаунт (имя «Пользователь N»), поэтому подпись берём уже после этого.
+    chatApi.register()
+      .then(function (state) {
+        chatName = Y.displayName(state.profile);
+        return chatApi.sendMessage(text, chatName);
+      })
       .then(function () { chatInput.value = ''; })
       .catch(function (err) {
         console.error(err);

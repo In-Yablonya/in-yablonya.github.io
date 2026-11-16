@@ -366,8 +366,8 @@
     var formEls = els;
     formEls.send.disabled = true;
     setStatus(formEls.formStatus, '', I.t('support.loading'));
-    // Имя берём заново: человек мог сменить никнейм в «Аккаунте» уже на этой странице.
-    api.init(Y.currentPrefs())
+    // Первый отзыв создаёт аккаунт, а имя берём заново: человек мог сменить никнейм в «Аккаунте» уже на этой странице.
+    api.register()
       .then(function (s) { return api.saveGameReview(forGame, rating, formEls.text.value, Y.displayName(s.profile)); })
       .then(function (result) {
         if (gameId !== forGame) return;

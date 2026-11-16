@@ -294,6 +294,13 @@ var GAMES = [
     if (Y.GameReviews) Y.GameReviews.close();
   });
 
+  // Скачивание файла игры идёт в рейтинг пользователя (js/stats.js); первое скачивание создаёт аккаунт.
+  // Кнопки «Играть в браузере» не считаются: это не скачивание.
+  dDownloads.addEventListener('click', function (e) {
+    var link = e.target.closest && e.target.closest('a[download]');
+    if (link && openGame && Y.stats) Y.stats.download(openGame.id);
+  });
+
   document.addEventListener('yablonya:lang', function () {
     renderCards();
     if (openGame) renderModal(openGame);

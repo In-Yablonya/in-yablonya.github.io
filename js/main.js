@@ -188,13 +188,13 @@
   };
 
   // Предзагрузка: в простое, после загрузки страницы, и маленькими порциями.
-  // Она же при первом заходе выдаёт ID (b.init), поэтому подключаемся и тогда, когда данные не нужны.
+  // Новому посетителю она ничего не создаёт: аккаунт (ID, номер, записи в базе) появляется, только когда человек
+  // что-то делает (скачивает игру, меняет ник, оставляет отзыв…), см. register в js/backend.js.
   function prefetchData() {
     var conn = navigator.connection;
     var saving = !!(conn && conn.saveData);                    // человек включил экономию трафика: данные не тянем
     var stale = saving ? [] : PREFETCH_PARTS.filter(function (name) { return cache.age(name) > PREFETCH_FRESH; });
-    var hasId = /(?:^|;\s*)yablonya_id=[^;]+/.test(document.cookie);
-    if (!stale.length && hasId) return;                        // и ID уже есть, и кэш свежий: Firebase не нужен
+    if (!stale.length) return;                                 // кэш свежий: Firebase не нужен
 
     backend()
       .then(function (b) {
@@ -209,6 +209,16 @@
     if (!firebaseConfigured()) return;
     if (window.requestIdleCallback) window.requestIdleCallback(prefetchData, { timeout: 4000 });
     else setTimeout(prefetchData, 1500);
+  });
+
+  // У посетителя появился аккаунт (или он вошёл по ID): сообщаем страницам новое состояние, чтобы они обновили
+  // подписи («мой» отзыв, имя, права администратора) и не считали его по-прежнему гостем.
+  document.addEventListener('yablonya:registered', function () {
+    if (!backendPromise) return;
+    backendPromise
+      .then(function (b) { return b.init(window.Yablonya.currentPrefs()); })
+      .then(function (state) { document.dispatchEvent(new CustomEvent('yablonya:state', { detail: state })); })
+      .catch(function () { /* не критично */ });
   });
 
   // Если Firebase уже загружен, сообщаем ему о смене языка/темы (чтобы сохранить в players/<id>).
