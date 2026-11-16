@@ -9,7 +9,9 @@
  * database.rules.json), а подписка на них идёт только, пока окно этой игры открыто.
  *
  * Подключение: projects.js вызывает Yablonya.GameReviews.open(id игры, контейнер) при открытии окна игры и
- * Yablonya.GameReviews.close() при закрытии.
+ * Yablonya.GameReviews.close() при закрытии. Когда приходят свежие отзывы, блок сообщает событием
+ * yablonya:gamestats ({ gameId, count, sum }), чтобы плитка игры обновила среднюю оценку; саму строку оценки
+ * для плитки рисует Yablonya.GameReviews.fillRating(элемент, статистика).
  */
 (function () {
   'use strict';
@@ -410,6 +412,36 @@
     renderAll();
   }
 
+  // Сообщаем плитке игры («Проекты»), что оценка изменилась: актуальные отзывы уже здесь, второй раз читать их незачем.
+  function announceStats(id, list) {
+    var sum = 0;
+    list.forEach(function (r) { sum += r.rating; });
+    document.dispatchEvent(new CustomEvent('yablonya:gamestats', { detail: { gameId: id, count: list.length, sum: sum } }));
+  }
+
+  // Строка со средней оценкой для плитки игры. stats: { count, sum } — оценки есть;
+  // null — отзывов нет; undefined — ещё не знаем (место остаётся пустым, чтобы плитка не прыгала).
+  function fillRating(el, stats) {
+    el.textContent = '';
+    el.removeAttribute('title');
+    if (stats === undefined) {
+      el.append(h('span', { 'aria-hidden': 'true', text: ' ' }));
+      return el;
+    }
+    if (!stats || !stats.count) {
+      el.append(h('span', { class: 'muted', text: I.t('reviews.avg.none') }));
+      return el;
+    }
+    var avg = stats.sum / stats.count;
+    el.setAttribute('title', I.t('reviews.avg.aria', { n: number1(avg) }));
+    el.append(
+      h('span', { class: 'game-card__star', 'aria-hidden': 'true', text: '★' }),
+      h('strong', { text: number1(avg) }),
+      h('span', { class: 'muted', text: '· ' + countText(stats.count) })
+    );
+    return el;
+  }
+
   function stopWatch() {
     if (stopWatching) stopWatching();
     stopWatching = null;
@@ -428,6 +460,7 @@
       reviews = list; ready = true; failed = false;
       // В кэш уходят отзывы без пометки «мой»: она принадлежит человеку, а не отзыву.
       Y.cache.set('gameReviews.' + forGame, list.map(function (r) { return Object.assign({}, r, { mine: false }); }));
+      announceStats(forGame, list);
       gotReviews();
       els.send.disabled = false;            // теперь известно, есть ли у человека свой отзыв
       renderAll(); syncForm();
@@ -500,5 +533,5 @@
     if (slowShown) setStatus(els.status, '', I.t('load.slow'));     // язык мог смениться
   });
 
-  Y.GameReviews = { open: open, close: close };
+  Y.GameReviews = { open: open, close: close, fillRating: fillRating };
 })();

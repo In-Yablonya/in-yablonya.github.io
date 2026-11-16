@@ -5,6 +5,8 @@
  * ССЫЛКИ НА ИГРЫ (скачивание и «Играть в браузере») лежат отдельно, в js/links.js:
  * при выходе новой версии правится только он. Ключ игры там совпадает с её id отсюда.
  *
+ * На плитке игры показывается средняя оценка из отзывов об игре (см. «средние оценки на плитках» ниже).
+ *
  * Новая игра: добавьте здесь блок с новым id, положите иконку и скриншоты в img/games/<id>/,
  * а ссылки впишите в js/links.js. Блок отзывов в окне игры (js/game-reviews.js) появится сам, привязанный к этому id:
  * id — латиница, цифры и дефис (до 40 символов), и менять его потом нельзя, под ним лежат отзывы.
@@ -128,18 +130,76 @@ var GAMES = [
     return el;
   }
 
+  // ---------- средние оценки на плитках ----------
+  // ratings — { <id игры>: { count, sum } } из отзывов об играх (js/game-reviews.js); игры без отзывов в нём нет.
+  // Пока полный список не приходил (ratingsLoaded === false), про игру знаем только то, что сообщило её открытое окно
+  // (knownGames); про остальные не знаем ничего, и место под оценку остаётся пустым.
+  var RATINGS_CACHE = 'gameRatings';
+  var RATINGS_FRESH = 60 * 1000;          // кэш свежее минуты второй раз не читаем
+  var ratings = {};
+  var ratingsLoaded = false;
+  var knownGames = {};
+  var ratingSlots = {};                   // id игры → строка с оценкой на плитке
+
+  (function () {
+    var cached = Y.cache.get(RATINGS_CACHE);
+    if (cached && typeof cached === 'object') { ratings = cached; ratingsLoaded = true; }
+  })();
+
+  function statsFor(id) {
+    if (has(ratings, id)) return ratings[id];
+    return (ratingsLoaded || knownGames[id]) ? null : undefined;
+  }
+
+  function paintRating(id) {
+    if (ratingSlots[id] && Y.GameReviews) Y.GameReviews.fillRating(ratingSlots[id], statsFor(id));
+  }
+
+  function setRatings(all) {
+    ratings = all || {};
+    ratingsLoaded = true;
+    GAMES.forEach(function (g) { paintRating(g.id); });
+  }
+
+  // Полный список оценок читаем один раз при открытии страницы; если кэш свежий, обходимся им.
+  function refreshRatings() {
+    if (!Y.firebaseConfigured() || Y.cache.age(RATINGS_CACHE) < RATINGS_FRESH) return;
+    Y.backend()
+      .then(function (b) {
+        return b.init(Y.currentPrefs()).then(function () {
+          return b.prefetch([RATINGS_CACHE], function (name, data) { Y.cache.set(name, data); setRatings(data); });
+        });
+      })
+      .catch(function (err) { console.warn('Оценки игр не загрузились:', err && err.message); });
+  }
+
+  // Открытое окно игры получило свежие отзывы: обновляем оценку на плитке (и в кэше, если там полный список).
+  document.addEventListener('yablonya:gamestats', function (e) {
+    var d = e.detail;
+    if (!d || typeof d.gameId !== 'string') return;
+    knownGames[d.gameId] = true;
+    if (d.count > 0) ratings[d.gameId] = { count: d.count, sum: d.sum }; else delete ratings[d.gameId];
+    if (ratingsLoaded) Y.cache.set(RATINGS_CACHE, ratings);
+    paintRating(d.gameId);
+  });
+
   // ---------- плитки ----------
   function renderCards() {
     grid.textContent = '';
+    ratingSlots = {};
     emptyNote.hidden = GAMES.length > 0;
     GAMES.forEach(function (game) {
+      var rating = h('p', { class: 'game-card__rating' });
+      ratingSlots[game.id] = rating;
       var card = h('button', { class: 'game-card', type: 'button', 'aria-haspopup': 'dialog' },
         img(game.cover, '', { width: 512, height: 512 }),
         h('h2', { class: 'game-card__title', text: I.loc(game.title) }),
+        rating,
         h('p', { class: 'game-card__desc', text: I.loc(game.description) })
       );
       card.addEventListener('click', function () { show(game); });
       grid.append(card);
+      paintRating(game.id);
     });
   }
 
@@ -240,4 +300,5 @@ var GAMES = [
   });
 
   renderCards();
+  refreshRatings();
 })();

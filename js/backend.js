@@ -804,6 +804,18 @@ async function gameReviewKey(gameId) {
   return Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 32);
 }
 
+// Оценки всех игр для плиток в «Проектах»: { <игра>: { count, sum } }, средняя = sum / count. Игр без отзывов в списке нет.
+// Считается из всех gameReviews, которые приходят одним запросом (см. prefetch); пока отзывов сотни, это совсем немного.
+// Если их станет много, заведите компактный узел с одними оценками (gameRatings/<игра>/<ключ>: число) и читайте его.
+function ratingsFrom(value) {
+  const out = {};
+  Object.keys(value || {}).forEach((game) => {
+    const list = reviewsFrom(value[game], null);
+    if (list.length) out[game] = { count: list.length, sum: list.reduce((total, r) => total + r.rating, 0) };
+  });
+  return out;
+}
+
 // Отзывы об одной игре (обновляются сами). Возвращает функцию «отписаться».
 export function watchGameReviews(gameId, onChange, onError) {
   let unsubscribe = null;
@@ -866,7 +878,8 @@ const PREFETCH_PARTS = {
   newsComments: ['newsComments', (value) => commentsFrom(value)],
   newsReactions: ['newsReactions', (value) => reactionsFrom(value, null)],
   reviews: ['reviews', (value) => reviewsFrom(value, null)],
-  mossPosts: ['mossPosts', (value) => postsFrom(value)]
+  mossPosts: ['mossPosts', (value) => postsFrom(value)],
+  gameRatings: ['gameReviews', (value) => ratingsFrom(value)]   // только по запросу страницы «Проекты» (в общую предзагрузку main.js не входит)
 };
 
 export async function prefetch(names, onPart) {
